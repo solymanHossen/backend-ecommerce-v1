@@ -1,20 +1,38 @@
-version: "3.8"
+version: '3.8'
+
 services:
-  app:
-    build: .
+  backend:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    restart: always
     ports:
-      - "3000:3000"
+      - "${PORT:-5000}:5000"
     environment:
+      - PORT=5000
       - NODE_ENV=production
+      - MONGO_URI=mongodb://admin:solyman271828@mongodb-mongo-1:27017/ecommerce_db_v1
+      - JWT_SECRET=${JWT_SECRET:-default_secret}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-default_refresh_secret}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
     depends_on:
-      - mongodb
-  mongodb:
-    image: mongo:7.0
-    container_name: mongo-db
+      - mongo
+    networks:
+      - my-network
+
+  mongo:
+    image: mongo:6.0
+    restart: always
     ports:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
+    networks:
+      - my-network
+
+networks:
+  my-network:
+    driver: bridge
 
 volumes:
   mongo-data:

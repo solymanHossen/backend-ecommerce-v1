@@ -1,20 +1,42 @@
-# Use an official Node.js runtime as the base image
-FROM node:18
+# Stage 1: Builder
+FROM node:18-alpine AS builder
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy package.json and package-lock.json first to leverage Docker cache
+# Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+# Install all dependencies (including devDependencies for building)
+RUN npm ci
 
-# Copy the rest of the application files
+# Copy source code
 COPY . .
 
-# Expose the port your app runs on
-EXPOSE 3000
+# Build the TypeScript application
+RUN npm run build
 
-# Set the command to start your app
-CMD ["npm", "run", "start"]
+# Stage 2: Production
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Set environment to production
+ENV NODE_ENV=production
+
+# Copy package files
+COPY package*.json ./
+
+# Install only production dependencies
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy built assets from builder stage
+COPY --from=builder /app/dist ./dist
+
+# Create a non-root user for security
+USER node
+
+# Expose the port
+EXPOSE 5000
+
+# Start the application
+CMD ["node", "dist/app.js"]
