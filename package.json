@@ -1,0 +1,54 @@
+{
+  "name": "e-com-v2",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon --exec ts-node src/app.ts",
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/compression": "^1.7.5",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/helmet": "^4.0.0",
+    "@types/joi": "^17.2.3",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^22.8.6",
+    "@types/stripe": "^8.0.417",
+    "nodemon": "^3.1.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "@types/nodemailer": "^6.4.17",
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^2.7.0",
+    "compression": "^1.7.5",
+    "cors": "^2.8.5",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "helmet": "^8.0.0",
+    "joi": "^17.13.3",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.8.0",
+    "multer": "^2.0.0",
+    "multer-storage-cloudinary": "^4.0.0",
+    "nodemailer": "^7.0.0",
+    "slugify": "^1.6.6",
+    "stripe": "^17.3.1",
+    "winston": "^3.16.0"
+  },
+  "overrides": {
+    "multer-storage-cloudinary": {
+      "cloudinary": "^2.7.0"
+    }
+  }
+}
