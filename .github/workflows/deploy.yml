@@ -3,33 +3,24 @@ name: Deploy to VPS
 on:
   push:
     branches:
-      - main  # আপনার মেইন ব্রাঞ্চের নাম যদি 'master' হয়, তবে এখানে 'master' লিখবেন
+      - main
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    runs-on: self-hosted  # ⚠️ পরিবর্তন: ubuntu-latest এর বদলে self-hosted
 
-    - name: Deploy to Server via SSH
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.HOST }}
-        username: ${{ secrets.USERNAME }}
-        key: ${{ secrets.SSH_KEY }}
-        port: ${{ secrets.PORT }}
-        script: |
-          # ১. আপনার অ্যাপের ফোল্ডারে যাওয়া
-          cd ~/apps/backend-ecommerce-v1
-          
-          # ২. গিটহাব থেকে নতুন কোড নামানো
-          git pull origin main
-          
-          # ৩. ডকার কন্টেইনার নতুন করে বিল্ড এবং রিস্টার্ট করা
-          docker compose down
-          docker compose up -d --build
-          
-          # ৪. ক্লিনআপ (পুরানো ইমেজ মুছে ফেলা)
-          docker image prune -f
+    steps:
+    - name: Deploy Application
+      run: |
+        # ১. আপনার অ্যাপের ফোল্ডারে যাওয়া
+        cd ~/apps/backend-ecommerce-v1
+        
+        # ২. গিটহাব থেকে নতুন কোড নামানো
+        git pull origin main
+        
+        # ৩. ডকার কন্টেইনার নতুন করে বিল্ড এবং রিস্টার্ট করা
+        docker compose down
+        docker compose up -d --build
+        
+        # ৪. ক্লিনআপ (পুরানো ইমেজ মুছে ফেলা)
+        docker image prune -f
