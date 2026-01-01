@@ -26,7 +26,7 @@ export const createProduct = async (req: RequestWithFile, res: Response) => {
         if (!req.file) {
             return res.status(400).json({
                 success: false,
-                message: "Product image is required",
+                message: "Product image is required this time",
             })
         }
 
