@@ -41,7 +41,7 @@ export const login = async (req: Request, res: Response) => {
     try {
         const { email, password } = req.body;
         const { user, token, refreshToken } = await AuthService.login(email, password);
-        sendResponse(res, 200, true, "Login successful! good job", {
+        sendResponse(res, 200, true, "Login successful!", {
             token,
             refreshToken,
             user: {
