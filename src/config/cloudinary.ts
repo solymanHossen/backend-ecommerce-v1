@@ -7,9 +7,9 @@ import dotenv from "dotenv";
 dotenv.config();
 // Configure Cloudinary
 const cloudinaryConfig: ConfigOptions = {
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "",
-    api_key: process.env.CLOUDINARY_API_KEY || "",
-    api_secret: process.env.CLOUDINARY_API_SECRET || "",
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "new_v1",
+    api_key: process.env.CLOUDINARY_API_KEY || "775246183333258",
+    api_secret: process.env.CLOUDINARY_API_SECRET || "QdclbqA2GUw2q9LtqbOW4vL7EM8",
 }
 
 cloudinary.config(cloudinaryConfig)
