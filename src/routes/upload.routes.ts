@@ -1,9 +1,12 @@
 import { Router } from "express"
 import { uploadSingleFile, uploadMultipleFiles, uploadFieldFiles, deleteFile } from "../controllers/upload.controller"
 import {handleUploadError, requireFiles, uploadFactory} from "../middleware/upload.middleware";
+import { authMiddleware } from "../middleware/auth.middleware";
 
 
 const router = Router()
+
+// SECURITY FIX: All upload routes now require authentication
 
 // Product image upload routes
 const productImageOptions = {
@@ -13,27 +16,30 @@ const productImageOptions = {
     transformation: [{ width: 1000, height: 1000, crop: "limit" }],
 }
 
-// Single product image upload
+// Single product image upload - PROTECTED
 router.post(
     "/products/single",
+    authMiddleware, // Authentication required
     uploadFactory.single("image", productImageOptions),
     handleUploadError,
     requireFiles("image"),
     uploadSingleFile,
 )
 
-// Multiple product images upload (max 5)
+// Multiple product images upload (max 5) - PROTECTED
 router.post(
     "/products/multiple",
+    authMiddleware, // Authentication required
     uploadFactory.array("images", 5, productImageOptions),
     handleUploadError,
     requireFiles("images"),
     uploadMultipleFiles,
 )
 
-// Product images with different fields
+// Product images with different fields - PROTECTED
 router.post(
     "/products/fields",
+    authMiddleware, // Authentication required
     uploadFactory.fields(
         [
             { name: "thumbnail", maxCount: 1 },
@@ -56,13 +62,14 @@ const avatarOptions = {
 
 router.post(
     "/users/avatar",
+    authMiddleware, // Authentication required
     uploadFactory.single("avatar", avatarOptions),
     handleUploadError,
     requireFiles("avatar"),
     uploadSingleFile,
 )
 
-// Delete file route
-router.delete("/:publicId", deleteFile)
+// Delete file route - PROTECTED
+router.delete("/:publicId", authMiddleware, deleteFile)
 
 export default router

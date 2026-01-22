@@ -37,18 +37,19 @@ export class CartService {
             let cartItem = await CartItem.findOne({cart: cart._id, product: productId}).session(session);
             if (cartItem) {
                 cartItem.quantity += quantity;
-                cartItem.price = product.price * cartItem.quantity;
+                // Price is NOT stored - will be calculated from product when needed
                 await cartItem.save({session});
             } else {
                 cartItem = new CartItem({
                     product: productId,
                     quantity,
-                    price: product.price * quantity
+                    // Price removed - calculated at checkout from current product price
                 });
                 await cartItem.save({session});
                 cart.items.push(cartItem._id as mongoose.Types.ObjectId);
             }
 
+            // Total amount calculated from current product prices
             cart.totalAmount = await this.calculateCartTotal(cart._id, session);
             await cart.save({session});
 
@@ -112,7 +113,7 @@ export class CartService {
             }
 
             cartItem.quantity = quantity;
-            cartItem.price = product.price * quantity;
+            // Price removed - will be calculated from product at checkout
             await cartItem.save({session});
 
             cart.totalAmount = await this.calculateCartTotal(cart._id, session);
@@ -154,7 +155,19 @@ export class CartService {
       }
 
     private static async calculateCartTotal(cartId: string | mongoose.Types.ObjectId, session: mongoose.ClientSession): Promise<number> {
-        const cartItems = await CartItem.find({_id: {$in: (await Cart.findById(cartId).session(session))?.items}}).session(session);
-        return cartItems.reduce((total, item) => total + item.price, 0);
+        const cart = await Cart.findById(cartId).session(session);
+        if (!cart || cart.items.length === 0) {
+            return 0;
+        }
+
+        const cartItems = await CartItem.find({_id: {$in: cart.items}})
+            .populate('product')
+            .session(session);
+
+        // SECURITY FIX: Calculate from current product prices, not stored cart item prices
+        return cartItems.reduce((total, item) => {
+            const product = item.product as unknown as IProduct;
+            return total + (product.price * item.quantity);
+        }, 0);
     }
 }

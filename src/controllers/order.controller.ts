@@ -32,9 +32,7 @@ export const getOrder = asyncHandler(async (req: AuthRequest, res: Response) => 
 });
 
 export const updateOrderStatus = asyncHandler(async (req: AuthRequest, res: Response) => {
-    if (req.user!.role !== 'admin') {
-        throw new AppError("Not authorized to update order status", 403);
-    }
+    // SECURITY FIX: Authorization now handled by adminMiddleware in routes
     const updatedOrder = await OrderService.updateOrderStatus(req.params.id, req.body.status);
     if (!updatedOrder) {
          throw new AppError("Order not found", 404);

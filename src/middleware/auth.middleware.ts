@@ -38,3 +38,33 @@ export const adminMiddleware = (req: AuthRequest, res: Response, next: NextFunct
     }
     next();
 };
+
+/**
+ * Middleware to validate resource ownership
+ * Used to prevent IDOR attacks on user-specific resources
+ */
+export const requireOwnership = (resourceGetter: (req: AuthRequest) => Promise<{ userId: string } | null>) => {
+    return async (req: AuthRequest, res: Response, next: NextFunction) => {
+        try {
+            const resource = await resourceGetter(req);
+            
+            if (!resource) {
+                return next(new AppError('Resource not found', 404));
+            }
+            
+            // Admin can access any resource
+            if (req.user?.role === UserRole.ADMIN) {
+                return next();
+            }
+            
+            // Check ownership
+            if (resource.userId !== req.user!._id.toString()) {
+                return next(new AppError('Access denied. You do not own this resource.', 403));
+            }
+            
+            next();
+        } catch (error) {
+            next(error);
+        }
+    };
+};

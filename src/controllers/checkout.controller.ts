@@ -18,6 +18,6 @@ export const confirmOrder = asyncHandler(async (req: Request, res: Response) => 
 
 export const getOrderSummary = asyncHandler(async (req: AuthRequest, res: Response) => {
     const { orderId } = req.params;
-    const order = await CheckoutService.getOrderSummary(orderId);
+    const order = await CheckoutService.getOrderSummary(orderId, req.user!._id);
     sendResponse(res, 200, true, "Order summary fetched", order);
 });

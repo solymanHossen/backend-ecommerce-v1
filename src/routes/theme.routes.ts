@@ -14,7 +14,7 @@ import {
   validateSetActiveTheme,
   validateThemeName
 } from '../validators/theme.validator';
-import { authMiddleware } from '../middleware/auth.middleware';
+import { authMiddleware, adminMiddleware } from '../middleware/auth.middleware';
 
 const router = express.Router();
 
@@ -23,10 +23,10 @@ router.get('/', getAllThemes);
 router.get('/active', getActiveTheme);
 router.get('/:name', validateThemeName, getThemeByName);
 
-// Protected routes (authentication required)
-router.post('/', authMiddleware, validateCreateTheme, createTheme);
-router.put('/:name', authMiddleware, validateUpdateTheme, updateTheme);
-router.delete('/:name', authMiddleware, validateThemeName, deleteTheme);
-router.post('/active', authMiddleware, validateSetActiveTheme, setActiveTheme);
+// SECURITY FIX: Protected routes - ADMIN ONLY
+router.post('/', authMiddleware, adminMiddleware, validateCreateTheme, createTheme);
+router.put('/:name', authMiddleware, adminMiddleware, validateUpdateTheme, updateTheme);
+router.delete('/:name', authMiddleware, adminMiddleware, validateThemeName, deleteTheme);
+router.post('/active', authMiddleware, adminMiddleware, validateSetActiveTheme, setActiveTheme);
 
 export default router;

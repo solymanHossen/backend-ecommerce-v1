@@ -1,8 +1,10 @@
 import { Cart } from "../models/cart.model";
-import { Order, IOrder } from "../models/order.model";
+import { Order, IOrder, IOrderItem } from "../models/order.model";
 import { User } from "../models/user.model";
 import { IProduct, Product } from "../models/product.model";
 import { PromotionService } from "./promotion.service";
+import { IPromotion } from "../models/promotion.model";
+import { AppError } from "../utils/AppError";
 import Stripe from "stripe";
 import mongoose, { Schema } from "mongoose";
 import { ICartItem } from "../models/cart-item.model";
@@ -24,130 +26,269 @@ export class CheckoutService {
     billingAddress: IOrder["billingAddress"],
     promotionCode?: string
   ): Promise<{ sessionId: string; orderId: string }> {
-    const cart = await Cart.findOne({ user: userId })
+    // Start a session for transaction
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const cart = await Cart.findOne({ user: userId })
         .populate({
           path: 'items',
           populate: {
             path: 'product',
             model: 'Product',
           },
-        });
+        })
+        .session(session);
 
-    if (!cart || cart.items.length === 0) {
-      throw new Error("Cart is empty");
-    }
-    const cartItems = cart.items as unknown as ICartItem[];
-
-    const subtotal:number = cartItems.reduce(
-      (total, item) => total + item.price * item.quantity,
-      0
-    );
-    const tax = subtotal * TAX_RATE;
-    const total = subtotal + tax + SHIPPING_COST;
-
-    let discountAmount = 0;
-    if (promotionCode) {
-      const promotion = await PromotionService.getPromotionByCode(
-        promotionCode
-      );
-      if (promotion) {
-        discountAmount = await PromotionService.applyPromotion(
-          promotion,
-          total
-        );
+      if (!cart || cart.items.length === 0) {
+        throw new AppError("Cart is empty", 400);
       }
-    }
 
-    const finalAmount = total - discountAmount;
-    const order = await OrderService.createOrder({
-      user: userId as any,
-      items: cartItems,
-      totalAmount: total,
-      subtotal,
-      tax,
-      shippingCost: SHIPPING_COST,
-      discountAmount,
-      finalAmount,
-      shippingAddress,
-      billingAddress,
-      paymentMethod: 'credit_card',
-      status: 'pending',
-      paymentStatus: 'pending',
-    });
+      const cartItems = cart.items as unknown as ICartItem[];
 
+      // SECURITY FIX: Recalculate ALL prices from database - NEVER trust client
+      let subtotal = 0;
+      const validatedItems: IOrderItem[] = [];
 
- /*   await order.save();*/
-    const sessionParams: Stripe.Checkout.SessionCreateParams = {
-      payment_method_types: ["card"],
-      line_items: cartItems.map((item: ICartItem) => ({
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: (item.product as unknown as IProduct).name,
-            images: [(item.product as unknown as IProduct).imageUrl],
-          },
-          unit_amount: Math.round(item.price * 100), // Stripe expects amount in cents
+      for (const item of cartItems) {
+        const product = await Product.findById(item.product).session(session);
+        
+        if (!product) {
+          throw new AppError(`Product not found: ${item.product}`, 404);
+        }
+
+        // Check stock availability
+        if ((product.stock ?? 0) < item.quantity) {
+          throw new AppError(
+            `Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`,
+            400
+          );
+        }
+
+        // Use CURRENT price from database, not cart
+        const itemPrice = product.price * item.quantity;
+        subtotal += itemPrice;
+
+        validatedItems.push({
+          product: product._id,
+          quantity: item.quantity,
+          price: product.price, // Store unit price
+        });
+      }
+
+      const tax = subtotal * TAX_RATE;
+      const total = subtotal + tax + SHIPPING_COST;
+
+      // SECURITY FIX: Validate promotion thoroughly
+      let discountAmount = 0;
+      let validPromotion: IPromotion | null = null;
+
+      if (promotionCode) {
+        const promotion = await PromotionService.getPromotionByCode(promotionCode);
+        
+        if (promotion) {
+          // Validate promotion is active and not expired
+          const now = new Date();
+          if (!promotion.isActive) {
+            throw new AppError("Promotion is not active", 400);
+          }
+
+          if (promotion.startDate > now) {
+            throw new AppError("Promotion has not started yet", 400);
+          }
+
+          if (promotion.endDate < now) {
+            throw new AppError("Promotion has expired", 400);
+          }
+
+          // Check usage limit
+          if (promotion.usageCount >= promotion.usageLimit) {
+            throw new AppError("Promotion usage limit reached", 400);
+          }
+
+          // Check minimum purchase amount
+          if (promotion.minPurchaseAmount && total < promotion.minPurchaseAmount) {
+            throw new AppError(
+              `Minimum purchase amount of $${promotion.minPurchaseAmount} required for this promotion`,
+              400
+            );
+          }
+
+          discountAmount = await PromotionService.applyPromotion(promotion, total);
+          validPromotion = promotion;
+        } else {
+          throw new AppError("Invalid promotion code", 400);
+        }
+      }
+
+      const finalAmount = Math.max(0, total - discountAmount);
+
+      // Create order with validated data
+      const order = await OrderService.createOrder({
+        user: userId as any,
+        items: validatedItems,
+        totalAmount: total,
+        subtotal,
+        tax,
+        shippingCost: SHIPPING_COST,
+        discountAmount,
+        finalAmount,
+        shippingAddress,
+        billingAddress,
+        paymentMethod: 'credit_card',
+        status: 'pending',
+        paymentStatus: 'pending',
+        promotion: validPromotion?._id,
+      });
+
+      // Increment promotion usage count atomically
+      if (validPromotion) {
+        await PromotionService.incrementUsageCount(validPromotion._id.toString());
+      }
+
+      const sessionParams: Stripe.Checkout.SessionCreateParams = {
+        payment_method_types: ["card"],
+        line_items: validatedItems.map((item) => {
+          const cartItem = cartItems.find(
+            (ci) => (ci.product as unknown as IProduct)._id.toString() === item.product.toString()
+          );
+          const product = cartItem?.product as unknown as IProduct;
+
+          return {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: product.name,
+                images: [product.imageUrl],
+              },
+              unit_amount: Math.round(item.price * 100), // Use validated price
+            },
+            quantity: item.quantity,
+          };
+        }),
+        mode: "payment",
+        success_url: `${process.env.FRONTEND_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.FRONTEND_URL}/checkout/cancel`,
+        customer_email: (await User.findById(userId))?.email ?? "",
+        metadata: {
+          orderId: order?._id?.toString() as string,
         },
-        quantity: item.quantity,
-      })),
-      mode: "payment",
-      success_url: `${process.env.FRONTEND_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/checkout/cancel`,
-      customer_email: (await User.findById(userId))?.email ?? "",
-      metadata: {
-        orderId: order?._id?.toString() as string,
-      },
-    };
+      };
 
-    const session = await stripe.checkout.sessions.create(sessionParams);
+      const stripeSession = await stripe.checkout.sessions.create(sessionParams);
 
-    return { sessionId: session.id, orderId: order?._id as unknown as string };
+      await session.commitTransaction();
+      return { sessionId: stripeSession.id, orderId: order?._id as unknown as string };
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
   }
 
   static async confirmOrder(sessionId: string): Promise<IOrder> {
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
-    const orderId = session.metadata?.orderId;
+    // Start a database session for transaction
+    const mongoSession = await mongoose.startSession();
+    mongoSession.startTransaction();
 
-    if (!orderId) {
-      throw new Error("Order ID not found in session metadata");
+    try {
+      const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
+      const orderId = stripeSession.metadata?.orderId;
+
+      if (!orderId) {
+        throw new AppError("Order ID not found in session metadata", 400);
+      }
+
+      const order = await Order.findById(orderId).session(mongoSession);
+      if (!order) {
+        throw new AppError("Order not found", 404);
+      }
+
+      // SECURITY FIX: Idempotency check - prevent double processing
+      if (order.paymentStatus === "paid" && order.paymentIntentId) {
+        // Order already processed, return it (idempotent)
+        await mongoSession.commitTransaction();
+        return order;
+      }
+
+      if (stripeSession.payment_status === "paid") {
+        // SECURITY FIX: Atomic stock deduction with proper error handling
+        const stockUpdatePromises = order.items.map(async (item) => {
+          const result = await Product.findOneAndUpdate(
+            {
+              _id: item.product,
+              stock: { $gte: item.quantity }, // Ensure sufficient stock
+            },
+            {
+              $inc: { stock: -item.quantity },
+            },
+            {
+              session: mongoSession,
+              new: true,
+            }
+          );
+
+          if (!result) {
+            throw new AppError(
+              `Insufficient stock for product ${item.product}. Order cannot be completed.`,
+              400
+            );
+          }
+        });
+
+        await Promise.all(stockUpdatePromises);
+
+        // Update order status
+        order.paymentStatus = "paid";
+        order.status = "processing";
+        order.paymentIntentId = stripeSession.payment_intent as string;
+        await order.save({ session: mongoSession });
+
+        // Clear the user's cart
+        await Cart.findOneAndUpdate(
+          { user: order.user },
+          { $set: { items: [], totalAmount: 0 } },
+          { session: mongoSession }
+        );
+
+        // Delete cart items
+        const cart = await Cart.findOne({ user: order.user }).session(mongoSession);
+        if (cart && cart.items.length > 0) {
+          await mongoose.model('CartItem').deleteMany(
+            { _id: { $in: cart.items } },
+            { session: mongoSession }
+          );
+        }
+      } else {
+        order.paymentStatus = "failed";
+        order.status = "cancelled";
+        await order.save({ session: mongoSession });
+      }
+
+      await mongoSession.commitTransaction();
+      return order;
+    } catch (error) {
+      await mongoSession.abortTransaction();
+      throw error;
+    } finally {
+      mongoSession.endSession();
     }
-
-    const order = await Order.findById(orderId);
-    if (!order) {
-      throw new Error("Order not found");
-    }
-
-    if (session.payment_status === "paid") {
-      order.paymentStatus = "paid";
-      order.status = "processing";
-      order.paymentIntentId = session.payment_intent as string;
-      await order.save();
-
-      // Update product stock
-      const updatePromises = order.items.map(item =>
-          Product.findByIdAndUpdate(item.product, { $inc: { stock: -item.quantity } })
-      );
-      await Promise.all(updatePromises);
-
-      // Clear the user's cart
-      await Cart.findOneAndUpdate(
-        { user: order.user },
-        { $set: { items: [] } }
-      );
-    }else {
-      order.paymentStatus = "failed";
-      order.status = "cancelled";
-      await order.save();
-    }
-
-    return order;
   }
 
-  static async getOrderSummary(orderId: string): Promise<IOrder> {
+
+  static async getOrderSummary(orderId: string, userId?: string): Promise<IOrder> {
     const order = await Order.findById(orderId).populate("items.product");
     if (!order) {
-      throw new Error("Order not found");
+      throw new AppError("Order not found", 404);
     }
+
+    // SECURITY FIX: Validate ownership unless accessed from webhook/admin context
+    if (userId && order.user?.toString() !== userId.toString()) {
+      throw new AppError("Access denied. You do not own this order.", 403);
+    }
+
     return order;
   }
 }

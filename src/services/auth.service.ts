@@ -175,15 +175,23 @@ export class AuthService {
   }
 
   static async refreshAccessToken(refreshToken: string): Promise<{ token: string }> {
-    const user = await User.findOne({ refreshToken });
+    // SECURITY FIX: Hash the incoming token to compare with stored hash
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(refreshToken)
+      .digest("hex");
+    
+    const user = await User.findOne({ refreshToken: hashedToken });
     if (!user) {
       throw new AppError("Invalid refresh token", 401);
     }
+    
     try {
       jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET!);
     } catch (err) {
       throw new AppError("Refresh token expired or invalid", 401);
     }
+    
     // Include role in payload
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET!, {
       expiresIn: "10m",
