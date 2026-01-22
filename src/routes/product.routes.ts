@@ -1,21 +1,19 @@
-
-import express from "express"
-import { authMiddleware } from "../middleware/auth.middleware"
+import express from "express";
+import { authMiddleware, adminMiddleware } from "../middleware/auth.middleware";
 import {
     createProduct,
     getProducts,
-    getProduct,
+    getProductBySlug,
     updateProduct,
     deleteProduct,
-    getProductsByCategory,
+    getProduct,
     addProductGalleryImages,
-    removeProductGalleryImage, getProductBySlug,
-} from "../controllers/product.controller"
-import { validateCreateProduct, validateUpdateProduct } from "../validators/product.validator"
-import {handleUploadError, uploadFactory} from "../middleware/upload.middleware";
+    removeProductGalleryImage,
+} from "../controllers/product.controller";
+import { validateCreateProduct, validateUpdateProduct } from "../validators/product.validator";
+import { handleUploadError, uploadFactory } from "../middleware/upload.middleware";
 
-
-const router = express.Router()
+const router = express.Router();
 
 // Configure product image upload options
 const productImageOptions = {
@@ -23,55 +21,49 @@ const productImageOptions = {
     formats: ["jpg", "jpeg", "png", "webp"],
     maxSize: 5 * 1024 * 1024, // 5MB
     transformation: [{ width: 1000, height: 1000, crop: "limit" }],
-}
+};
 
-const productGalleryOptions = {
-    folder: "products/gallery",
-    formats: ["jpg", "jpeg", "png", "webp"],
-    maxSize: 5 * 1024 * 1024, // 5MB
-    transformation: [{ width: 1200, height: 1200, crop: "limit" }],
-}
+// Public Routes
+router.get("/", getProducts);
+router.get("/:slug", getProductBySlug); // Assuming slug lookup is public
 
-// Create product with optional image upload
+// Admin Protected Routes
 router.post(
     "/",
     authMiddleware,
+    adminMiddleware,
     uploadFactory.single("image", productImageOptions),
     handleUploadError,
     validateCreateProduct,
-    createProduct,
-)
+    createProduct
+);
 
-
-
-// Update product with optional image upload
 router.put(
     "/:id",
     authMiddleware,
+    adminMiddleware,
     uploadFactory.single("image", productImageOptions),
     handleUploadError,
     validateUpdateProduct,
-    updateProduct,
-)
+    updateProduct
+);
 
-// Add gallery images to product
+router.delete("/:id", authMiddleware, adminMiddleware, deleteProduct);
+
 router.post(
     "/:id/gallery",
     authMiddleware,
-    uploadFactory.array("gallery", 5, productGalleryOptions),
+    adminMiddleware,
+    uploadFactory.array("images", 5),
     handleUploadError,
-    addProductGalleryImages,
-)
+    addProductGalleryImages
+);
 
-// Remove gallery image from product
-router.delete("/:id/gallery/:imageId", authMiddleware, removeProductGalleryImage)
+router.delete(
+    "/:id/gallery/:imageId",
+    authMiddleware,
+    adminMiddleware,
+    removeProductGalleryImage
+);
 
-// Standard routes without file upload
-router.get("/", getProducts)
-// create slug for product
-router.get("/slug/:slug", getProductBySlug)
-router.get("/:id", getProduct)
-router.delete("/:id", authMiddleware, deleteProduct)
-router.get("/category/:category", getProductsByCategory)
-
-export default router
+export default router;

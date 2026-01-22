@@ -1,62 +1,60 @@
 import { Request, Response } from 'express';
 import { ReviewService } from '../services/review.service';
 import { AuthRequest } from '../middleware/auth.middleware';
-import logger from "../utils/logger";
+import sendResponse from "../utils/response";
+import { asyncHandler } from "../utils/asyncHandler";
+import { AppError } from "../utils/AppError";
 
-export const createReview = async (req: AuthRequest, res: Response) => {
-    try {
-        const reviewData = {
-            user: req.user!._id,
-            product: req.params.productId,
-            ...req.body
-        };
-        const review = await ReviewService.createReview(reviewData);
-        res.status(201).json(review);
-    } catch (error) {
-        res.status(400).json({ error: 'Error creating review' });
+export const createReview = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const reviewData = {
+        user: req.user!._id,
+        product: req.params.productId,
+        ...req.body
+    };
+    const review = await ReviewService.createReview(reviewData);
+    sendResponse(res, 201, true, "Review created successfully", review);
+});
+
+export const getReviewsByProduct = asyncHandler(async (req: Request, res: Response) => {
+    const reviews = await ReviewService.getReviewsByProduct(req.params.productId);
+    sendResponse(res, 200, true, "Reviews fetched successfully", reviews);
+});
+
+export const updateReview = asyncHandler(async (req: AuthRequest, res: Response) => {
+    // Fetch first to verify ownership safely
+    const reviews = await ReviewService.getReviewsByReview(req.params.reviewId);
+    if (!reviews || reviews.length === 0) {
+        throw new AppError("Review not found", 404);
     }
-};
 
-export const getReviewsByProduct = async (req: Request, res: Response) => {
-    try {
-        const reviews = await ReviewService.getReviewsByProduct(req.params.productId);
-        res.json(reviews);
-    } catch (error) {
-        res.status(400).json({ error: 'Error fetching reviews' });
+    // Check if user matches. Using optional chaining and safeguards
+    // deleteReview usage: review[0].user._id.toString()
+    const reviewUser = reviews[0].user;
+    const reviewUserId = reviewUser._id ? reviewUser._id.toString() : reviewUser.toString();
+    
+    if (reviewUserId !== req.user!._id.toString()) {
+         throw new AppError("Not authorized to update this review", 403);
     }
-};
 
-export const updateReview = async (req: AuthRequest, res: Response):Promise<void> => {
-    try {
-        const review = await ReviewService.updateReview(req.params.reviewId, req.body);
-        if (!review) {
-             res.status(404).json({ error: 'Review not found' }); return;
-        }
-        if (review.user.toString() !== req.user!._id.toString()) {
-             res.status(403).json({ error: 'Not authorized to update this review' }); return ;
-        }
-        res.json(review);
-    } catch (error){
-        logger.error(error);
-        res.status(400).json({ error: 'Error updating review' });
+    const updatedReview = await ReviewService.updateReview(req.params.reviewId, req.body);
+    sendResponse(res, 200, true, "Review updated successfully", updatedReview);
+});
+
+export const deleteReview = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const reviewId = req.params.reviewId;
+    const reviews = await ReviewService.getReviewsByReview(reviewId);
+    
+    if (!reviews || reviews.length === 0) {
+         throw new AppError("Review not found", 404);
     }
-};
+    
+    const reviewUser = reviews[0].user;
+    const reviewUserId = reviewUser._id ? reviewUser._id.toString() : reviewUser.toString();
 
-export const deleteReview = async (req: AuthRequest, res: Response):Promise<void> => {
-    const reviewId  = req.params.reviewId;
-        try {
-            const review = await ReviewService.getReviewsByReview(reviewId);
-            if (!review) {
-                 res.status(404).json({ error: 'Review not found' }); return
-            }
-            if (review[0].user._id.toString() !== req.user?._id.toString()) {
-                res.status(403).json({ error: 'Not authorized to delete this review' });
-                return;
-            }
-            await ReviewService.deleteReview(reviewId);
-            res.json({ message: 'Review deleted successfully' });
-        } catch (error:any) {
-            logger.error(`Error deleting review with ID ${reviewId}: ${error.message}`);
-            res.status(400).json({ error: 'Error deleting review' });
-        }
-}
+    if (reviewUserId !== req.user!._id.toString()) {
+        throw new AppError("Not authorized to delete this review", 403);
+    }
+    
+    await ReviewService.deleteReview(reviewId);
+    sendResponse(res, 200, true, "Review deleted successfully");
+});

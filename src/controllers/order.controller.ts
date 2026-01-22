@@ -1,57 +1,43 @@
 import { Response } from 'express';
 import { OrderService } from '../services/order.service';
 import { AuthRequest } from '../middleware/auth.middleware';
-import logger from "../utils/logger";
-export const createOrder = async (req: AuthRequest, res: Response):Promise<void> => {
+import sendResponse from "../utils/response";
+import { asyncHandler } from "../utils/asyncHandler";
+import { AppError } from "../utils/AppError";
 
-    try {
-        const orderData = {
-            user: req.user!._id,
-            ...req.body
-        };
-        const order = await OrderService.createOrder(orderData);
-        res.status(201).json(order);
-    } catch (error) {
-        logger.error(error);
-        res.status(500).json({ message: 'Error creating order', error });
-    }
-};
+export const createOrder = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const orderData = {
+        user: req.user!._id,
+        ...req.body
+    };
+    const order = await OrderService.createOrder(orderData);
+    sendResponse(res, 201, true, "Order created successfully", order);
+});
 
-export const getOrders = async (req: AuthRequest , res: Response) => {
-    try {
-        const orders = await OrderService.getOrders(req.user!._id);
-        res.json(orders);
-    } catch (error) {
-        logger.error(error);
-        res.status(500).json({ message: 'Error fetching orders', error });
-    }
-};
+export const getOrders = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const orders = await OrderService.getOrders(req.user!._id);
+    sendResponse(res, 200, true, "Orders fetched successfully", orders);
+});
 
-export const getOrder = async (req: AuthRequest, res: Response):Promise<void> => {
-    try {
-        const order = await OrderService.getOrderById(req.params.id);
-        if (!order) {
-             res.status(404).json({ message: 'Order not found' }); return ;
-        }
-        if (!order.user || order.user.toString()  !== req.user!._id.toString()) {
-             res.status(403).json({ message: 'Not authorized to view this order' }); return
-        }
-        res.json(order);
-    } catch (error) {
-        logger.error(error);
-        res.status(500).json({ message: 'Error fetching order', error });
+export const getOrder = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const order = await OrderService.getOrderById(req.params.id);
+    if (!order) {
+         throw new AppError("Order not found", 404);
     }
-};
+    
+    if (!order.user || order.user.toString() !== req.user!._id.toString()) {
+         throw new AppError("Not authorized to view this order", 403);
+    }
+    sendResponse(res, 200, true, "Order fetched successfully", order);
+});
 
-export const updateOrderStatus = async (req: AuthRequest, res: Response):Promise<void> => {
-    try {
-        const updatedOrder = await OrderService.updateOrderStatus(req.params.id, req.body.status);
-        if (!updatedOrder) {
-             res.status(404).json({ message: 'Order not found' }); return ;
-        }
-        res.json(updatedOrder);
-    } catch (error) {
-        logger.error(error);
-        res.status(500).json({ message: 'Error updating order status', error });
+export const updateOrderStatus = asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (req.user!.role !== 'admin') {
+        throw new AppError("Not authorized to update order status", 403);
     }
-};
+    const updatedOrder = await OrderService.updateOrderStatus(req.params.id, req.body.status);
+    if (!updatedOrder) {
+         throw new AppError("Order not found", 404);
+    }
+    sendResponse(res, 200, true, "Order status updated successfully", updatedOrder);
+});

@@ -1,23 +1,13 @@
-import { config } from 'dotenv';
-config(); // Load environment variables
-
-if (!process.env.JWT_REFRESH_SECRET) {
-  console.warn("Warning: JWT_REFRESH_SECRET is not defined in environment variables.");
-}
-
 import express from 'express';
-import mongoose from 'mongoose';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import { connectDatabase } from './config/database';
+import { env } from './config';
 import authRoutes from './routes/auth.routes';
-import winston from 'winston';
 import userRoutes from './routes/user.routes';
 import productRoutes from './routes/product.routes';
 import orderRoutes from './routes/order.routes';
-import { errorHandler } from './middleware/error.middleware';
-import logger from "./utils/logger";
 import reviewRoutes from "./routes/review.routes";
 import promotionRoutes from "./routes/promotion.routes";
 import discountRoutes from "./routes/discount.routes";
@@ -26,30 +16,42 @@ import wishlistRoutes from "./routes/wishlist.routes";
 import checkoutRoutes from "./routes/checkout.routes";
 import themeRoutes from "./routes/theme.routes";
 import { ThemeService } from "./services/theme.service";
-
+import { errorHandler } from './middleware/error.middleware';
+import logger from "./utils/logger";
+import { authLimiter, apiLimiter } from './middleware/rateLimit.middleware';
 
 const app = express();
 
 // Middleware
-app.use(cors());
+// Secure CORS Configuration
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        // Check if origin matches FRONTEND_URL
+        const allowedOrigins = [env.FRONTEND_URL];
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true, // Allow cookies/headers if needed
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(helmet());
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Connect to MongoDB and initialize theme database
-const initializeApp = async () => {
-  try {
-    await connectDatabase();
-    await ThemeService.initializeDatabase();
-    logger.info('Application initialized successfully');
-  } catch (error) {
-    logger.error('Failed to initialize application:', error);
-    process.exit(1);
-  }
-};
-
-initializeApp();
+// Apply Rate Limits
+// Apply strict limit to auth routes
+app.use('/api/v1/auth', authLimiter);
+// Apply general limit to all api routes
+app.use('/api', apiLimiter);
 
 // Routes
 app.use('/api/v1/auth', authRoutes);
@@ -64,14 +66,33 @@ app.use('/api/v1/wishlist', wishlistRoutes);
 app.use('/api/v1/checkout', checkoutRoutes);
 app.use('/api/v1/themes', themeRoutes);
 
+// Health Check
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', uptime: process.uptime() });
+});
+
 // Error handling middleware
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 3000;
+const initializeApp = async () => {
+  try {
+    await connectDatabase();
+    await ThemeService.initializeDatabase();
+    logger.info('Application initialized successfully');
+    
+    const PORT = env.PORT || 3000;
+    app.listen(PORT, () => {
+        logger.info(`Server is running on port ${PORT}`);
+    });
+  } catch (error) {
+    logger.error('Failed to initialize application:', error);
+    process.exit(1);
+  }
+};
 
-app.listen(PORT, () => {
-    logger.info(`Server is running on port ${PORT}`);
-
-});
+// Only automatically start if this file is the entry point
+if (require.main === module) {
+    initializeApp();
+}
 
 export default app;

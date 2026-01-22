@@ -1,29 +1,40 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { User, IUser } from '../models/user.model';
-import logger from "../utils/logger";
+import { UserRole } from '../constants/roles';
+import { AppError } from '../utils/AppError';
+
+export interface UserPayload {
+    _id: string;
+    role: string;
+}
 
 export interface AuthRequest extends Request {
-    user?: IUser;
+    user?: UserPayload;
 }
 
 export const authMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         const token = req.header('Authorization')?.replace('Bearer ', '');
         if (!token) {
-            throw new Error();
+            throw new AppError('No token provided', 401);
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as {id: string };
-        const user = await User.findOne({ _id: decoded.id });
-       logger.info(user);
-        if (!user) {
-            throw new Error();
-        }
-
-        req.user = user;
+        const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as {id: string, role: string};
+        
+        req.user = {
+            _id: decoded.id,
+            role: decoded.role
+        };
+        
         next();
     } catch (error) {
-        res.status(401).send({ error: 'Please authenticate.' });
+        next(new AppError('Please authenticate.', 401));
     }
+};
+
+export const adminMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user || req.user.role !== UserRole.ADMIN) {
+        return next(new AppError('Access denied. Admin rights required.', 403));
+    }
+    next();
 };
