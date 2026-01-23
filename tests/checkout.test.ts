@@ -1,6 +1,11 @@
 process.env.NODE_ENV = 'test';
 process.env.MONGODB_URI = 'mongodb://memory-server-uri-placeholder';
 process.env.JWT_SECRET = 'test_secret';
+process.env.JWT_REFRESH_SECRET = 'test_refresh_secret';
+process.env.EMAIL_USER = 'test_user';
+process.env.EMAIL_PASS = 'test_pass';
+process.env.FRONTEND_URL = 'http://localhost:3000';
+process.env.STRIPE_WEBHOOK_SECRET = 'test_stripe_webhook_secret';
 process.env.STRIPE_SECRET_KEY = 'test_stripe_key';
 
 import Stripe from 'stripe';
