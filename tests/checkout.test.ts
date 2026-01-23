@@ -101,13 +101,9 @@ describe('Checkout Process', () => {
     };
     
     const checkoutPayload = {
-        items: [], 
-        totalAmount: 220,
-        subtotal: 200,
-        tax: 10,
-        shippingCost: 10,
-        finalAmount: 220,
-        paymentMethod: 'credit_card',
+        // items: [], // Removed as per new validation logic
+        // totalAmount: 220, // Server calculated
+        // paymentMethod: 'credit_card', // Removed as per validator
         shippingAddress: addresses,
         billingAddress: addresses
     };
@@ -116,14 +112,15 @@ describe('Checkout Process', () => {
         const item = await CartItem.create({
             product: productId,
             quantity: 2,
-            price: 100
+            // price: 100 // Price derived from product
         });
         await Cart.create({
             user: userId,
             items: [item._id]
         });
         
-        const payload = { ...checkoutPayload, items: [{ product: productId, quantity: 2, price: 100 }] };
+        // Payload should only contain address and payment method (and optionally promo code)
+        const payload = { ...checkoutPayload };
 
         const res = await request(app)
             .post('/api/v1/checkout/create-checkout-session')

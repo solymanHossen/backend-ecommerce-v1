@@ -134,8 +134,8 @@ describe('Shopping Cart', () => {
 });
 
 describe('Order System', () => {
-    const validOrder = {
-        items: [{ product: 'dummy_id', quantity: 1, price: 50 }],
+    const validOrderPayload = {
+        items: [{ product: 'dummy_id', quantity: 1 }], 
         shippingAddress: {
             fullName: 'Test User',
             addressLine1: '123 Main St',
@@ -153,34 +153,39 @@ describe('Order System', () => {
             state: 'State'
         },
         paymentMethod: 'credit_card',
-        subtotal: 50,
-        tax: 0,
-        shippingCost: 0,
-        discountAmount: 0,
-        totalAmount: 50,
-        finalAmount: 50,
-        status: 'pending'
     };
 
+    const createManualOrder = (userId: string, productId: string) => ({
+        user: userId,
+        items: [{ product: productId, quantity: 1 }],
+        shippingAddress: validOrderPayload.shippingAddress,
+        billingAddress: validOrderPayload.billingAddress,
+        paymentMethod: 'credit_card',
+        subtotal: 50,
+        tax: 0,
+        shippingCost: 10,
+        totalAmount: 60,
+        discountAmount: 0,
+        finalAmount: 60,
+        status: 'pending'
+    });
+
     beforeEach(() => {
-        validOrder.items[0].product = productId;
+        validOrderPayload.items[0].product = productId;
     });
 
     it('should create an order successfully', async () => {
         const res = await request(app)
             .post('/api/v1/orders')
             .set('Authorization', `Bearer ${userToken}`)
-            .send(validOrder);
+            .send(validOrderPayload);
         
         expect(res.status).toBe(201);
         expect(res.body.data.status).toBe('pending');
     });
 
     it('should get user orders', async () => {
-        await Order.create({
-            user: userId,
-            ...validOrder
-        });
+        await Order.create(createManualOrder(userId, productId));
 
         const res = await request(app)
             .get('/api/v1/orders')
@@ -191,10 +196,7 @@ describe('Order System', () => {
     });
     
     it('should prevent user from seeing others orders', async () => {
-         const otherOrder = await Order.create({
-            user: new mongoose.Types.ObjectId(), 
-            ...validOrder
-        });
+         const otherOrder = await Order.create(createManualOrder(new mongoose.Types.ObjectId().toString(), productId));
         
         const res = await request(app)
             .get(`/api/v1/orders/${otherOrder._id}`)
@@ -205,7 +207,7 @@ describe('Order System', () => {
 
     describe('Admin Order Management', () => {
         it('should allow admin to get all orders', async () => {
-             const order = await Order.create({ user: userId, ...validOrder, status: 'pending' });
+             const order = await Order.create(createManualOrder(userId, productId));
              
              const res = await request(app)
                 .patch(`/api/v1/orders/${order._id}/status`)
@@ -217,7 +219,7 @@ describe('Order System', () => {
         });
 
         it('should DENY user from updating order status', async () => {
-             const order = await Order.create({ user: userId, ...validOrder, status: 'pending' });
+             const order = await Order.create(createManualOrder(userId, productId));
              
              const res = await request(app)
                 .patch(`/api/v1/orders/${order._id}/status`)

@@ -27,11 +27,15 @@ export class CheckoutService {
     promotionCode?: string
   ): Promise<{ sessionId: string; orderId: string }> {
     // Start verify cart session
-    const cart = await Cart.findOne({ user: userId }).populate('items.product');
+    const cart = await Cart.findOne({ user: userId }).populate({
+        path: 'items',
+        populate: { path: 'product' }
+    });
     
     if (!cart || cart.items.length === 0) {
       throw new AppError("Cart is empty", 400);
     }
+
 
     // Prepare items for OrderService
     const orderItems = cart.items.map((item: any) => ({

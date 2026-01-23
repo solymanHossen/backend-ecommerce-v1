@@ -62,7 +62,7 @@ export class OrderService {
                             if (!promotion.minPurchaseAmount || (subtotal + tax + SHIPPING_COST) >= promotion.minPurchaseAmount) {
                                 discountAmount = await PromotionService.applyPromotion(promotion, subtotal + tax + SHIPPING_COST);
                                 promotionId = promotion._id;
-                                await PromotionService.incrementUsageCount(promotion._id);
+                                await PromotionService.incrementUsageCount(promotion._id.toString());
                             }
                       }
                  }
