@@ -94,33 +94,30 @@ export class CheckoutService {
     return { sessionId: stripeSession.id, orderId: order._id.toString() };
   }
 
-  static async confirmOrder(sessionId: string): Promise<IOrder> {
-    // Start a database session for transaction
+  static async handleStripeWebhook(stripeSession: Stripe.Checkout.Session): Promise<void> {
+    const orderId = stripeSession.metadata?.orderId;
+
+    if (!orderId) {
+      throw new AppError("Order ID not found in session metadata", 400);
+    }
+
     const mongoSession = await mongoose.startSession();
     mongoSession.startTransaction();
 
     try {
-      const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
-      const orderId = stripeSession.metadata?.orderId;
-
-      if (!orderId) {
-        throw new AppError("Order ID not found in session metadata", 400);
-      }
-
       const order = await Order.findById(orderId).session(mongoSession);
       if (!order) {
         throw new AppError("Order not found", 404);
       }
 
-      // SECURITY FIX: Idempotency check - prevent double processing
-      if (order.paymentStatus === "paid" && order.paymentIntentId) {
-        // Order already processed, return it (idempotent)
+      // Idempotency check: if order is already paid, do nothing
+      if (order.paymentStatus === "paid") {
         await mongoSession.commitTransaction();
-        return order;
+        return;
       }
 
       if (stripeSession.payment_status === "paid") {
-        // SECURITY FIX: Atomic stock deduction with proper error handling
+         // Atomic stock deduction
         const stockUpdatePromises = order.items.map(async (item) => {
           const result = await Product.findOneAndUpdate(
             {
@@ -168,13 +165,13 @@ export class CheckoutService {
           );
         }
       } else {
+        // Handle failed/expired sessions if needed
         order.paymentStatus = "failed";
         order.status = "cancelled";
         await order.save({ session: mongoSession });
       }
 
       await mongoSession.commitTransaction();
-      return order;
     } catch (error) {
       await mongoSession.abortTransaction();
       throw error;
@@ -182,6 +179,20 @@ export class CheckoutService {
       mongoSession.endSession();
     }
   }
+
+  // Deprecated: Logic moved to handleStripeWebhook
+  // This method now only returns the order status for client polling
+  static async confirmOrder(sessionId: string): Promise<IOrder> {
+      const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
+      const orderId = stripeSession.metadata?.orderId;
+      if (!orderId) throw new AppError("Order ID not found", 400);
+      
+      const order = await Order.findById(orderId);
+      if (!order) throw new AppError("Order not found", 404);
+      
+      return order;
+  }
+
 
 
   static async getOrderSummary(orderId: string, userId?: string): Promise<IOrder> {

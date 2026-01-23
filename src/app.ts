@@ -14,6 +14,7 @@ import discountRoutes from "./routes/discount.routes";
 import cartRoutes from "./routes/cart.routes";
 import wishlistRoutes from "./routes/wishlist.routes";
 import checkoutRoutes from "./routes/checkout.routes";
+import webhookRoutes from "./routes/webhook.routes";
 import themeRoutes from "./routes/theme.routes";
 import { ThemeService } from "./services/theme.service";
 import { errorHandler } from './middleware/error.middleware';
@@ -44,7 +45,20 @@ app.use(cors({
 
 app.use(helmet());
 app.use(compression());
-app.use(express.json());
+
+// Webhook route needs raw body for signature verification
+app.use('/api/v1/webhook', express.raw({ type: 'application/json' }));
+app.use('/api/v1/webhook', webhookRoutes);
+
+// JSON parser for other routes
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/v1/webhook') {
+    next();
+  } else {
+    express.json()(req, res, next);
+  }
+});
+
 app.use(express.urlencoded({ extended: true }));
 
 // Apply Rate Limits

@@ -16,7 +16,8 @@ const envSchema = Joi.object({
   EMAIL_PASS: Joi.string().required(),
   FRONTEND_URL: Joi.string().required(),
   BASE_URL: Joi.string().uri().default('http://localhost:3000'),
-  REDIS_URL: Joi.string().optional()
+  REDIS_URL: Joi.string().optional(),
+  STRIPE_WEBHOOK_SECRET: Joi.string().required()
 })
 .unknown(); // Allow other environment variables to exist
 
