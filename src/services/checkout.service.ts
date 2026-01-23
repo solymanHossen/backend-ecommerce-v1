@@ -26,166 +26,68 @@ export class CheckoutService {
     billingAddress: IOrder["billingAddress"],
     promotionCode?: string
   ): Promise<{ sessionId: string; orderId: string }> {
-    // Start a session for transaction
-    const session = await mongoose.startSession();
-    session.startTransaction();
+    // Start verify cart session
+    const cart = await Cart.findOne({ user: userId }).populate('items.product');
+    
+    if (!cart || cart.items.length === 0) {
+      throw new AppError("Cart is empty", 400);
+    }
 
-    try {
-      const cart = await Cart.findOne({ user: userId })
-        .populate({
-          path: 'items',
-          populate: {
-            path: 'product',
-            model: 'Product',
-          },
-        })
-        .session(session);
+    // Prepare items for OrderService
+    const orderItems = cart.items.map((item: any) => ({
+        product: item.product._id ? item.product._id.toString() : item.product.toString(),
+        quantity: item.quantity
+    }));
 
-      if (!cart || cart.items.length === 0) {
-        throw new AppError("Cart is empty", 400);
-      }
-
-      const cartItems = cart.items as unknown as ICartItem[];
-
-      // SECURITY FIX: Recalculate ALL prices from database - NEVER trust client
-      let subtotal = 0;
-      const validatedItems: IOrderItem[] = [];
-
-      for (const item of cartItems) {
-        const product = await Product.findById(item.product).session(session);
-        
-        if (!product) {
-          throw new AppError(`Product not found: ${item.product}`, 404);
-        }
-
-        // Check stock availability
-        if ((product.stock ?? 0) < item.quantity) {
-          throw new AppError(
-            `Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`,
-            400
-          );
-        }
-
-        // Use CURRENT price from database, not cart
-        const itemPrice = product.price * item.quantity;
-        subtotal += itemPrice;
-
-        validatedItems.push({
-          product: product._id,
-          quantity: item.quantity,
-          price: product.price, // Store unit price
-        });
-      }
-
-      const tax = subtotal * TAX_RATE;
-      const total = subtotal + tax + SHIPPING_COST;
-
-      // SECURITY FIX: Validate promotion thoroughly
-      let discountAmount = 0;
-      let validPromotion: IPromotion | null = null;
-
-      if (promotionCode) {
-        const promotion = await PromotionService.getPromotionByCode(promotionCode);
-        
-        if (promotion) {
-          // Validate promotion is active and not expired
-          const now = new Date();
-          if (!promotion.isActive) {
-            throw new AppError("Promotion is not active", 400);
-          }
-
-          if (promotion.startDate > now) {
-            throw new AppError("Promotion has not started yet", 400);
-          }
-
-          if (promotion.endDate < now) {
-            throw new AppError("Promotion has expired", 400);
-          }
-
-          // Check usage limit
-          if (promotion.usageCount >= promotion.usageLimit) {
-            throw new AppError("Promotion usage limit reached", 400);
-          }
-
-          // Check minimum purchase amount
-          if (promotion.minPurchaseAmount && total < promotion.minPurchaseAmount) {
-            throw new AppError(
-              `Minimum purchase amount of $${promotion.minPurchaseAmount} required for this promotion`,
-              400
-            );
-          }
-
-          discountAmount = await PromotionService.applyPromotion(promotion, total);
-          validPromotion = promotion;
-        } else {
-          throw new AppError("Invalid promotion code", 400);
-        }
-      }
-
-      const finalAmount = Math.max(0, total - discountAmount);
-
-      // Create order with validated data
-      const order = await OrderService.createOrder({
-        user: userId as any,
-        items: validatedItems,
-        totalAmount: total,
-        subtotal,
-        tax,
-        shippingCost: SHIPPING_COST,
-        discountAmount,
-        finalAmount,
+    // Create Order using centralized secure service
+    // This handles price calculation, stock checks, and promotion validation securely.
+    const order = await OrderService.createOrder({
+        user: userId,
+        items: orderItems,
         shippingAddress,
         billingAddress,
-        paymentMethod: 'credit_card',
-        status: 'pending',
-        paymentStatus: 'pending',
-        promotion: validPromotion?._id,
-      });
+        paymentMethod: 'credit_card', // Default for Stripe checkout
+        promotionCode
+    });
 
-      // Increment promotion usage count atomically
-      if (validPromotion) {
-        await PromotionService.incrementUsageCount(validPromotion._id.toString());
-      }
+    // Populate order items to get details for Stripe
+    await order.populate('items.product');
 
-      const sessionParams: Stripe.Checkout.SessionCreateParams = {
+    // Create Stripe Session
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: ["card"],
-        line_items: validatedItems.map((item) => {
-          const cartItem = cartItems.find(
-            (ci) => (ci.product as unknown as IProduct)._id.toString() === item.product.toString()
-          );
-          const product = cartItem?.product as unknown as IProduct;
-
-          return {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: product.name,
-                images: [product.imageUrl],
-              },
-              unit_amount: Math.round(item.price * 100), // Use validated price
-            },
-            quantity: item.quantity,
-          };
+        line_items: order.items.map((item: any) => {
+             const product = item.product; 
+             // Ensure we use the price from the ORDER (which came from DB)
+             // Order stores unit price in items
+             return {
+                price_data: {
+                  currency: "usd",
+                  product_data: {
+                    name: product.name,
+                    images: [product.imageUrl],
+                  },
+                  unit_amount: Math.round(item.price * 100), 
+                },
+                quantity: item.quantity,
+              };
         }),
         mode: "payment",
         success_url: `${process.env.FRONTEND_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.FRONTEND_URL}/checkout/cancel`,
         customer_email: (await User.findById(userId))?.email ?? "",
         metadata: {
-          orderId: order?._id?.toString() as string,
+          orderId: order._id.toString(),
         },
-      };
+    };
 
-      const stripeSession = await stripe.checkout.sessions.create(sessionParams);
+    const stripeSession = await stripe.checkout.sessions.create(sessionParams);
 
-      await session.commitTransaction();
-      return { sessionId: stripeSession.id, orderId: order?._id as unknown as string };
-    } catch (error) {
-      await session.abortTransaction();
-      throw error;
-    } finally {
-      session.endSession();
-    }
+    // Update order with payment intent placeholder or session info if needed
+    // order.paymentIntentId = stripeSession.payment_intent as string; // Not available yet usually
+    // await order.save(); 
+
+    return { sessionId: stripeSession.id, orderId: order._id.toString() };
   }
 
   static async confirmOrder(sessionId: string): Promise<IOrder> {

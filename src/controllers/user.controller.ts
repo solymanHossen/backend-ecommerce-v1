@@ -14,7 +14,21 @@ export const getUserProfile = asyncHandler(async (req: AuthRequest, res: Respons
 });
 
 export const updateUserProfile = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const updatedUser = await UserService.updateUser(req.user!._id, req.body);
+    // SECURITY FIX: Whitelist allowed fields to prevent Mass Assignment
+    const allowedFields = ['name', 'profilePicture', 'bio', 'address', 'phoneNumber'];
+    const updateData: any = {};
+    
+    Object.keys(req.body).forEach(key => {
+        if (allowedFields.includes(key)) {
+            updateData[key] = req.body[key];
+        }
+    });
+
+    if (Object.keys(updateData).length === 0) {
+         throw new AppError('No valid fields to update', 400);
+    }
+
+    const updatedUser = await UserService.updateUser(req.user!._id, updateData);
     if (!updatedUser) {
         throw new AppError('User not found', 404);
     }

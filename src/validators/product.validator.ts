@@ -47,8 +47,10 @@ const listProductSchema = Joi.object({
     search: Joi.string().allow('').optional(),
     category: Joi.string().allow('').optional(),
     sort: Joi.string().optional(),
+    minPrice: Joi.number().min(0).optional(),
+    maxPrice: Joi.number().min(0).optional(),
     // Allow other potential filters but ensure limit is safe
-}).unknown(true);
+});
 
 export const validateListProducts = (req: Request, res: Response, next: NextFunction):void => {
     const { error } = listProductSchema.validate(req.query);

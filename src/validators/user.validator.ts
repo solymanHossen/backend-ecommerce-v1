@@ -12,9 +12,11 @@ const updateUserSchema = Joi.object({
         zipCode: Joi.string(),
         country: Joi.string(),
     }),
-    _id: Joi.string(),
     phoneNumber: Joi.string(),
+    // Strictly forbid _id, role, email, password, etc.
 });
+// Joi default is usually allowUnknown: false.
+
 
 export const validateUpdateUser = (req: Request, res: Response, next: NextFunction):void => {
     const { error } = updateUserSchema.validate(req.body);

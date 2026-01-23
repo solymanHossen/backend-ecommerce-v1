@@ -16,8 +16,11 @@ export class ReviewService {
             }
 
             product.reviews.push(review._id);
+            // Fix: Calculate new average correctly
+            const totalScore = product.averageRating * product.reviewCount + review.rating;
             product.reviewCount += 1;
-            product.averageRating = (product.averageRating * (product.reviewCount - 1) + review.rating);
+            product.averageRating = totalScore / product.reviewCount;
+            
             await product.save({ session });
 
             await session.commitTransaction();

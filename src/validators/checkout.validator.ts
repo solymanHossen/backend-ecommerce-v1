@@ -13,20 +13,14 @@ const addressSchema = Joi.object({
 });
 
 const createCheckoutSessionSchema = Joi.object({
-    items: Joi.array(),
-    totalAmount: Joi.number().positive().required(),
-    subtotal: Joi.number().positive().required(),
-    tax: Joi.number().min(0).required(),
-    shippingCost: Joi.number().min(0).required(),
-    discountAmount: Joi.number().min(0).default(0),
-    finalAmount: Joi.number().positive().required(),
-    status: Joi.string().valid('pending', 'processing', 'shipped', 'delivered', 'cancelled').default('pending'),
-    paymentStatus: Joi.string().valid('pending', 'paid', 'failed').default('pending'),
-    paymentMethod: Joi.string().valid('credit_card', 'paypal', 'cash_on_delivery').required(),
-    paymentIntentId: Joi.string().optional(),
     shippingAddress: addressSchema.required(),
     billingAddress: addressSchema.required(),
+    promotionCode: Joi.string().optional().allow(''),
+    // Items are taken from Cart, not body for checkout session usually? 
+    // Controller implementation: const { shippingAddress, billingAddress, promotionCode } = req.body;
+    // So items are NOT expected in body.
 });
+
 
 const confirmOrderSchema = Joi.object({
     sessionId: Joi.string().required(),

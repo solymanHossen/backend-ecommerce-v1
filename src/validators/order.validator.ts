@@ -17,22 +17,16 @@ const orderSchema = Joi.object({
         Joi.object({
             product: Joi.string().required(),
             quantity: Joi.number().integer().min(1).required(),
-            price: Joi.number().optional() // Make optional if backend looks it up
+            // price removed - server calculated
         })
     ).required(),
-    user: Joi.string().optional(),
-    subtotal: Joi.number().required(),
-    tax: Joi.number().default(0),
-    shippingCost: Joi.number().default(0),
-    discountAmount: Joi.number().default(0),
-    totalAmount: Joi.number().required(),
-    finalAmount: Joi.number().required(),
+    user: Joi.string().optional(), // If admin creates for user? Or ignored if controller overwrites.
     paymentMethod: Joi.string().valid('credit_card', 'paypal', 'cod').default('credit_card'),
-    paymentStatus: Joi.string().valid('pending', 'paid', 'failed').default('pending'),
     shippingAddress: addressSchema.required(),
     billingAddress: addressSchema.required(),
-    status: Joi.string().valid('pending', 'processing', 'shipped', 'delivered', 'cancelled').default('pending')
-}).unknown(true); // Allow other fields cautiously, or be strict. Better strict, but for speed allowing unknown might help if I missed one.
+    promotionCode: Joi.string().allow('', null).optional()
+    // subtotal, tax, totalAmount, finalAmount, status, paymentStatus REMOVED. Sever controlled.
+}); // No unknown(true) -> strict by default or implied. Joi defaults vary but usually strict object.
 
 const orderStatusSchema = Joi.object({
     status: Joi.string().valid('pending', 'processing', 'shipped', 'delivered', 'cancelled').required(),
