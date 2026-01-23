@@ -1,27 +1,44 @@
 import dotenv from 'dotenv';
-import { z } from 'zod';
+import Joi from 'joi';
 import logger from '../utils/logger';
 
 dotenv.config();
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.string().default('3000'),
-  MONGODB_URI: z.string(),
-  JWT_SECRET: z.string().min(10, "JWT_SECRET must be at least 10 chars"),
-  JWT_REFRESH_SECRET: z.string().min(10, "JWT_REFRESH_SECRET must be at least 10 chars"),
-  EMAIL_USER: z.string().nonempty("EMAIL_USER is required"),
-  EMAIL_PASS: z.string().nonempty("EMAIL_PASS is required"),
-  FRONTEND_URL: z.string().min(1, "FRONTEND_URL is required"),
-  BASE_URL: z.string().url().optional().default('http://localhost:3000'),
-  REDIS_URL: z.string().optional()
+const envSchema = Joi.object({
+  NODE_ENV: Joi.string()
+    .valid('development', 'production', 'test')
+    .default('development'),
+  PORT: Joi.string().default('3000'),
+  MONGODB_URI: Joi.string().required().description('Database Connection URI'),
+  JWT_SECRET: Joi.string().min(10).required(),
+  JWT_REFRESH_SECRET: Joi.string().min(10).required(),
+  EMAIL_USER: Joi.string().required(),
+  EMAIL_PASS: Joi.string().required(),
+  FRONTEND_URL: Joi.string().required(),
+  BASE_URL: Joi.string().uri().default('http://localhost:3000'),
+  REDIS_URL: Joi.string().optional()
+})
+.unknown(); // Allow other environment variables to exist
+
+const { error, value: envVars } = envSchema.validate(process.env, {
+  abortEarly: false // Return all errors
 });
 
-const _env = envSchema.safeParse(process.env);
-
-if (!_env.success) {
-  logger.error("❌ Invalid environment variables:", _env.error.format());
+if (error) {
+  logger.error("❌ Invalid environment variables:", error.details.map((d) => d.message).join(', '));
   process.exit(1);
 }
 
-export const env = _env.data;
+export const env = {
+  NODE_ENV: envVars.NODE_ENV,
+  PORT: envVars.PORT,
+  MONGODB_URI: envVars.MONGODB_URI,
+  JWT_SECRET: envVars.JWT_SECRET,
+  JWT_REFRESH_SECRET: envVars.JWT_REFRESH_SECRET,
+  EMAIL_USER: envVars.EMAIL_USER,
+  EMAIL_PASS: envVars.EMAIL_PASS,
+  FRONTEND_URL: envVars.FRONTEND_URL,
+  BASE_URL: envVars.BASE_URL,
+  REDIS_URL: envVars.REDIS_URL
+};
+
