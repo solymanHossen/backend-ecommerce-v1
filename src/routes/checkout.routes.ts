@@ -6,7 +6,7 @@ import { validateCreateCheckoutSession, validateConfirmOrder } from '../validato
 const router = express.Router();
 
 router.post('/create-checkout-session', authMiddleware, validateCreateCheckoutSession, createCheckoutSession);
-router.post('/confirm-order', validateConfirmOrder, confirmOrder);
+router.post('/confirm-order', authMiddleware, validateConfirmOrder, confirmOrder);
 router.get('/order-summary/:orderId', authMiddleware, getOrderSummary);
 
 export default router;

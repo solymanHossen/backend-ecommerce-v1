@@ -1,12 +1,12 @@
 import { Router } from "express"
 import { uploadSingleFile, uploadMultipleFiles, uploadFieldFiles, deleteFile } from "../controllers/upload.controller"
 import {handleUploadError, requireFiles, uploadFactory} from "../middleware/upload.middleware";
-import { authMiddleware } from "../middleware/auth.middleware";
+import { authMiddleware, adminMiddleware } from "../middleware/auth.middleware";
 
 
 const router = Router()
 
-// SECURITY FIX: All upload routes now require authentication
+// SECURITY FIX: All upload routes now require authentication and admin rights
 
 // Product image upload routes
 const productImageOptions = {
@@ -20,6 +20,7 @@ const productImageOptions = {
 router.post(
     "/products/single",
     authMiddleware, // Authentication required
+    adminMiddleware, // Admin required
     uploadFactory.single("image", productImageOptions),
     handleUploadError,
     requireFiles("image"),
@@ -30,6 +31,7 @@ router.post(
 router.post(
     "/products/multiple",
     authMiddleware, // Authentication required
+    adminMiddleware, // Admin required
     uploadFactory.array("images", 5, productImageOptions),
     handleUploadError,
     requireFiles("images"),
@@ -40,6 +42,7 @@ router.post(
 router.post(
     "/products/fields",
     authMiddleware, // Authentication required
+    adminMiddleware, // Admin required
     uploadFactory.fields(
         [
             { name: "thumbnail", maxCount: 1 },

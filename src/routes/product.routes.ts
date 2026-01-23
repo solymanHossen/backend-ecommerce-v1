@@ -10,7 +10,7 @@ import {
     addProductGalleryImages,
     removeProductGalleryImage,
 } from "../controllers/product.controller";
-import { validateCreateProduct, validateUpdateProduct } from "../validators/product.validator";
+import { validateCreateProduct, validateUpdateProduct, validateListProducts } from "../validators/product.validator";
 import { handleUploadError, uploadFactory } from "../middleware/upload.middleware";
 
 const router = express.Router();
@@ -24,7 +24,7 @@ const productImageOptions = {
 };
 
 // Public Routes
-router.get("/", getProducts);
+router.get("/", validateListProducts, getProducts);
 router.get("/:slug", getProductBySlug); // Assuming slug lookup is public
 
 // Admin Protected Routes

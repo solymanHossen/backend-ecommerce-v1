@@ -40,3 +40,20 @@ export const validateUpdateProduct = (req: Request, res: Response, next: NextFun
     }
     next();
 };
+
+const listProductSchema = Joi.object({
+    page: Joi.number().integer().min(1).optional(),
+    limit: Joi.number().integer().min(1).max(100).optional(),
+    search: Joi.string().allow('').optional(),
+    category: Joi.string().allow('').optional(),
+    sort: Joi.string().optional(),
+    // Allow other potential filters but ensure limit is safe
+}).unknown(true);
+
+export const validateListProducts = (req: Request, res: Response, next: NextFunction):void => {
+    const { error } = listProductSchema.validate(req.query);
+    if (error) {
+        res.status(400).json({ error: error.details[0].message }); return;
+    }
+    next();
+};
