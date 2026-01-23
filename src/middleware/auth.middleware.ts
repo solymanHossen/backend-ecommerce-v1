@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { UserRole } from '../constants/roles';
 import { AppError } from '../utils/AppError';
+import { User } from '../models/user.model';
 
 export interface UserPayload {
     _id: string;
@@ -32,11 +33,22 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
     }
 };
 
-export const adminMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (!req.user || req.user.role !== UserRole.ADMIN) {
-        return next(new AppError('Access denied. Admin rights required.', 403));
+export const adminMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        if (!req.user || req.user.role !== UserRole.ADMIN) {
+             throw new AppError('Access denied. Admin rights required.', 403);
+        }
+
+        // SECURITY FIX: Verify admin status from DB to handle banned/demoted admins immediately
+        const user = await User.findById(req.user._id);
+        if (!user || user.role !== UserRole.ADMIN) {
+            throw new AppError('Access denied. Admin privileges revoked.', 403);
+        }
+
+        next();
+    } catch (error) {
+        next(error);
     }
-    next();
 };
 
 /**

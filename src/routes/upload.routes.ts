@@ -72,7 +72,12 @@ router.post(
     uploadSingleFile,
 )
 
-// Delete file route - PROTECTED
-router.delete("/:publicId", authMiddleware, deleteFile)
+// Delete file route - PROTECTED and ADMIN ONLY
+router.delete(
+    "/:publicId", 
+    authMiddleware, 
+    adminMiddleware, 
+    deleteFile
+);
 
 export default router

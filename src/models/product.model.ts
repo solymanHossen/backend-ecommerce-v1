@@ -43,12 +43,21 @@ const productSchema = new Schema<IProduct>({
 }, { timestamps: true });
 productSchema.pre('validate', async function (next) {
     if (!this.isModified('name')) return next();
+    
+    // Generate base slug
     const baseSlug = slugify(this.name, { lower: true, strict: true });
     let slug = baseSlug;
-    let count = 1;
-    while (await Product.exists({ slug })) {
-        slug = `${baseSlug}-${count++}`;
+
+    // Atomic-like check: If slug exists, append random string instead of sequential count
+    // This reduces race condition probability compared to sequential incrementing
+    const slugExists = await mongoose.model('Product').exists({ slug });
+    
+    if (slugExists) {
+        // Appending 6 char random hex string
+         const suffix = Math.random().toString(16).substring(2, 8);
+         slug = `${baseSlug}-${suffix}`;
     }
+    
     this.slug = slug;
     next();
 });
