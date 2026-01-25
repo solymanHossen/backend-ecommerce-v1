@@ -66,12 +66,26 @@ beforeEach(async () => {
     // Create Default Theme
     const theme = await Theme.create({
         name: 'Default',
+        label: 'Default Theme',
         colors: {
-            primary: '#000000',
-            secondary: '#ffffff',
-            accent: '#ff0000',
-            background: '#f5f5f5',
-            text: '#333333'
+            light: {
+                background: '#ffffff', foreground: '#000000',
+                primary: '#000000', 'primary-foreground': '#ffffff',
+                secondary: '#f5f5f5', 'secondary-foreground': '#000000',
+                accent: '#f5f5f5', 'accent-foreground': '#000000',
+                muted: '#f5f5f5', 'muted-foreground': '#666666',
+                card: '#ffffff', 'card-foreground': '#000000',
+                border: '#e5e5e5', input: '#e5e5e5', ring: '#000000'
+            },
+            dark: {
+                background: '#09090b', foreground: '#fafafa',
+                primary: '#fafafa', 'primary-foreground': '#09090b',
+                secondary: '#27272a', 'secondary-foreground': '#fafafa',
+                accent: '#27272a', 'accent-foreground': '#fafafa',
+                muted: '#27272a', 'muted-foreground': '#a1a1aa',
+                card: '#09090b', 'card-foreground': '#fafafa',
+                border: '#27272a', input: '#27272a', ring: '#fafafa'
+            }
         },
         isActive: true
     });
@@ -86,29 +100,41 @@ describe('Theme Management', () => {
                 .get('/api/v1/themes');
 
             expect(res.status).toBe(200);
-            expect(res.body.data).toHaveLength(1);
+            expect(res.body.data.themes).toHaveLength(1);
         });
 
         it('should get active theme', async () => {
-             // Assuming endpoint exists for getting active only, or filtering list
-             // Since context didn't show exact endpoint, testing generic get logic for active flag
-             const res = await request(app).get('/api/v1/themes');
-             const active = res.body.data.find((t: any) => t.isActive);
-             expect(active).toBeTruthy();
-             expect(active.name).toBe('Default');
+             const res = await request(app).get('/api/v1/themes/active');
+             
+             expect(res.status).toBe(200);
+             expect(res.body.data.theme).toBe('default');
         });
         
         it('should allow admin to create a new theme', async () => {
             const newTheme = {
-                name: 'Dark Mode',
+                name: 'DarkMode',
+                label: 'Dark Mode Theme',
                 colors: {
-                    primary: '#000000',
-                    secondary: '#111111',
-                    accent: '#222222',
-                    background: '#000000',
-                    text: '#ffffff'
-                },
-                isActive: false
+                    light: {
+                        background: '#ffffff', foreground: '#000000',
+                        primary: '#000000', 'primary-foreground': '#ffffff',
+                        secondary: '#f5f5f5', 'secondary-foreground': '#000000',
+                        accent: '#f5f5f5', 'accent-foreground': '#000000',
+                        muted: '#f5f5f5', 'muted-foreground': '#666666',
+                        card: '#ffffff', 'card-foreground': '#000000',
+                        border: '#e5e5e5', input: '#e5e5e5', ring: '#000000'
+                    },
+                    dark: {
+                        background: '#000000', foreground: '#ffffff',
+                        primary: '#ffffff', 'primary-foreground': '#000000',
+                        secondary: '#111111', 'secondary-foreground': '#ffffff',
+                        accent: '#222222', 'accent-foreground': '#ffffff',
+                        muted: '#333333', 'muted-foreground': '#aaaaaa',
+                        card: '#000000', 'card-foreground': '#ffffff',
+                        border: '#333333', input: '#333333', ring: '#ffffff'
+                    }
+                }
+                // isActive removed as validator likely forbids setting it directly on create
             };
 
             const res = await request(app)
@@ -117,27 +143,45 @@ describe('Theme Management', () => {
                 .send(newTheme);
 
             expect(res.status).toBe(201);
-            expect(res.body.data.name).toBe(newTheme.name);
+            expect(res.body.data.theme.name).toBe(newTheme.name);
         });
 
         it('should allow admin to activate a theme', async () => {
-            // Create a second inactive theme
-            const t2 = await Theme.create({
-                name: 'Inactive',
-                colors: { primary: '#fff', secondary:'#000', accent: '#333', background: '#ccc', text:'#000' },
-                isActive: false
-            });
-
-            const res = await request(app)
-                .put(`/api/v1/themes/${t2._id}`) // Assuming PUT updates
-                .set('Authorization', `Bearer ${adminToken}`)
-                .send({ isActive: true });
-
-            expect(res.status).toBe(200);
-            
-            // Check if others were deactivated if logic dictates single active theme
-            // (Depends on implementation, skipping assertion to stay generic)
-        });
+             // Create a second inactive theme
+             const t2 = await Theme.create({
+                 name: 'Inactive',
+                 label: 'Inactive Theme',
+                 colors: {
+                     light: {
+                         background: '#ffffff', foreground: '#000000',
+                         primary: '#000000', 'primary-foreground': '#ffffff',
+                         secondary: '#f5f5f5', 'secondary-foreground': '#000000',
+                         accent: '#f5f5f5', 'accent-foreground': '#000000',
+                         muted: '#f5f5f5', 'muted-foreground': '#666666',
+                         card: '#ffffff', 'card-foreground': '#000000',
+                         border: '#e5e5e5', input: '#e5e5e5', ring: '#000000'
+                     },
+                     dark: {
+                         background: '#09090b', foreground: '#fafafa',
+                         primary: '#fafafa', 'primary-foreground': '#09090b',
+                         secondary: '#27272a', 'secondary-foreground': '#fafafa',
+                         accent: '#27272a', 'accent-foreground': '#fafafa',
+                         muted: '#27272a', 'muted-foreground': '#a1a1aa',
+                         card: '#09090b', 'card-foreground': '#fafafa',
+                         border: '#27272a', input: '#27272a', ring: '#fafafa'
+                     }
+                 }
+                 // isActive: false  <-- REMOVED as not in schema
+             });
+ 
+             const res = await request(app)
+                 .post('/api/v1/themes/active')
+                 .set('Authorization', `Bearer ${adminToken}`)
+                 .send({ theme: t2.name, isDark: false });
+ 
+             expect(res.status).toBe(200);
+             expect(res.body.data.theme).toBe(t2.name);
+         });
     });
 
     describe('Sad Path', () => {
@@ -152,12 +196,23 @@ describe('Theme Management', () => {
         it('should fail validation when creating theme with invalid hex codes', async () => {
             const invalidTheme = {
                 name: 'Bad Colors',
+                label: 'Bad Colors Theme',
                 colors: {
-                    primary: 'RED', // Invalid hex
-                    secondary: '#ffffff',
-                    accent: '#ff', // Invalid length
-                    background: 'rgb(0,0,0)', // Not hex
-                    text: '#333333'
+                    light: {
+                        primary: 'RED', // Invalid hex
+                        secondary: '#ffffff',
+                        background: '#ffffff', foreground: '#000000',
+                        'primary-foreground': '#ffffff',
+                        'secondary-foreground': '#000000',
+                        accent: '#f5f5f5', 'accent-foreground': '#000000',
+                        muted: '#f5f5f5', 'muted-foreground': '#666666',
+                        card: '#ffffff', 'card-foreground': '#000000',
+                        border: '#e5e5e5', input: '#e5e5e5', ring: '#000000'
+                    },
+                    dark: {
+                        // Missing fields entirely implies validation failure too
+                        background: 'rgb(0,0,0)' // Invalid format
+                    }
                 },
                 isActive: false
             };

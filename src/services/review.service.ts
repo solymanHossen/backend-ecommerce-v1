@@ -2,6 +2,7 @@ import {IReview, Review} from '../models/review.model';
 import {Product} from '../models/product.model';
 import mongoose from 'mongoose';
 import logger from "../utils/logger";
+import { AppError } from '../utils/AppError';
 
 export class ReviewService {
     static async createReview(reviewData: Partial<IReview>): Promise<IReview> {
@@ -12,7 +13,7 @@ export class ReviewService {
            await review.save({ session });
             const product = await Product.findById(review.product).session(session);
             if (!product) {
-                throw new Error('Product not found');
+                throw new AppError('Product not found', 404);
             }
 
             product.reviews.push(review._id);

@@ -73,6 +73,8 @@ beforeEach(async () => {
     const product = await Product.create({
         name: 'Expensive Item',
         description: 'Quality',
+        htmlDescription: '<p>Quality</p>',
+        imageUrl: 'http://example.com/item.jpg',
         price: 100, // $100
         stock: 50,
         category: ['General']
@@ -127,7 +129,8 @@ describe('Promotion Management', () => {
                 value: 5,
                 startDate: new Date(),
                 endDate: new Date(Date.now() + 100000),
-                isActive: true
+                isActive: true,
+                usageLimit: 100
              });
 
              const res = await request(app)
@@ -156,7 +159,8 @@ describe('Promotion Management', () => {
                 value: 10,
                 startDate: new Date(Date.now() - 100000),
                 endDate: new Date(Date.now() - 50000), // Ended in past
-                isActive: true
+                isActive: true,
+                usageLimit: 100
             });
 
             // Try to get "active" promotions possibly filtered?

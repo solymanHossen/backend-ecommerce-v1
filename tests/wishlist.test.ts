@@ -32,8 +32,20 @@ let productId: string;
 
 beforeAll(async () => {
     mongoServer = await MongoMemoryServer.create();
-    await mongoose.connect(mongoServer.getUri());
+    const mongoUri = mongoServer.getUri();
+    await mongoose.connect(mongoUri);
+
+    // Mock session to allow transactions on standalone instance
+    const originalStartSession = mongoose.startSession.bind(mongoose);
+    jest.spyOn(mongoose, 'startSession').mockImplementation(async (options) => {
+        const session = await originalStartSession(options);
+        session.startTransaction = jest.fn();
+        session.commitTransaction = jest.fn();
+        session.abortTransaction = jest.fn();
+        return session;
+    });
 });
+
 
 afterAll(async () => {
     await mongoose.disconnect();
@@ -60,6 +72,8 @@ beforeEach(async () => {
     const product = await Product.create({
         name: 'Wishlist Item',
         description: 'Description',
+        htmlDescription: '<p>Description</p>',
+        imageUrl: 'http://example.com/image.jpg',
         price: 100,
         category: ['test'],
         stock: 10

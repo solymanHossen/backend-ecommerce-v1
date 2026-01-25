@@ -4,6 +4,7 @@ import { Product } from '../models/product.model';
 import { Discount } from '../models/discount.model';
 import mongoose, {Schema} from 'mongoose';
 import crypto from 'crypto';
+import { AppError } from '../utils/AppError';
 
 export class WishlistService {
     static async getWishlist(userId: string | mongoose.Types.ObjectId): Promise<IWishlist | null> {
@@ -24,7 +25,7 @@ export class WishlistService {
 
             const product = await Product.findById(productId).session(session);
             if (!product) {
-                throw new Error('Product not found');
+                throw new AppError('Product not found', 404);
             }
 
             if (!wishlist.products.includes(productId as any)) {

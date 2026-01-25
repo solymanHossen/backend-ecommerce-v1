@@ -45,8 +45,22 @@ let productId: string;
 
 beforeAll(async () => {
     mongoServer = await MongoMemoryServer.create();
-    await mongoose.connect(mongoServer.getUri());
+    const mongoUri = mongoServer.getUri();
+    await mongoose.connect(mongoUri);
+
+    // Mock session to allow transactions on standalone instance
+    // We create a real session but disable the actual transaction commands
+    const originalStartSession = mongoose.startSession.bind(mongoose);
+    jest.spyOn(mongoose, 'startSession').mockImplementation(async (options) => {
+        const session = await originalStartSession(options);
+        session.startTransaction = jest.fn();
+        session.commitTransaction = jest.fn();
+        session.abortTransaction = jest.fn();
+        // We keep endSession as is, or mock it if it causes issues
+        return session;
+    });
 });
+
 
 afterAll(async () => {
     await mongoose.disconnect();
@@ -83,6 +97,8 @@ beforeEach(async () => {
     const product = await Product.create({
         name: 'Test Product',
         description: 'Description',
+        htmlDescription: '<p>Description</p>',
+        imageUrl: 'http://example.com/image.jpg',
         price: 100,
         category: ['test'],
         stock: 10
@@ -101,7 +117,7 @@ describe('Review Management', () => {
             };
 
             const res = await request(app)
-                .post(`/api/v1/products/${productId}/reviews`)
+                .post(`/api/v1/reviews/products/${productId}/reviews`)
                 .set('Authorization', `Bearer ${userToken}`)
                 .send(reviewData);
 
@@ -122,7 +138,7 @@ describe('Review Management', () => {
             });
 
             const res = await request(app)
-                .get(`/api/v1/products/${productId}/reviews`);
+                .get(`/api/v1/reviews/products/${productId}/reviews`);
 
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
@@ -136,7 +152,7 @@ describe('Review Management', () => {
         it('should return 404 when reviewing a non-existent product', async () => {
              const fakeId = new mongoose.Types.ObjectId();
              const res = await request(app)
-                .post(`/api/v1/products/${fakeId}/reviews`)
+                .post(`/api/v1/reviews/products/${fakeId}/reviews`)
                 .set('Authorization', `Bearer ${userToken}`)
                 .send({
                     rating: 5,
@@ -149,7 +165,7 @@ describe('Review Management', () => {
 
         it('should fail with invalid rating', async () => {
              const res = await request(app)
-                .post(`/api/v1/products/${productId}/reviews`)
+                .post(`/api/v1/reviews/products/${productId}/reviews`)
                 .set('Authorization', `Bearer ${userToken}`)
                 .send({
                     rating: 6, // Invalid
