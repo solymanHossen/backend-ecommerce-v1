@@ -1,7 +1,6 @@
 
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import bcrypt from 'bcryptjs';
 import path from 'path';
 
 // Load env vars
@@ -27,121 +26,143 @@ import { ThemeService } from '../services/theme.service';
 const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/ecommerce_db';
 
 const cleanData = async () => {
-  console.log('🧹 Cleaning existing data...');
-  
-  await User.deleteMany({});
-  await Product.deleteMany({});
-  await Order.deleteMany({});
-  await Review.deleteMany({});
-  await GlobalSetting.deleteMany({});
-  await Cart.deleteMany({});
-  await CartItem.deleteMany({});
-  await Wishlist.deleteMany({});
-  await Discount.deleteMany({});
-  await Promotion.deleteMany({});
-  await Setting.deleteMany({});
-  
-  // Note: We are NOT deleting Themes as requested
-  
-  console.log('✅ Data cleaned successfully');
+    // Optional Data Wiping: Only run if --clean is passed
+    if (!process.argv.includes('--clean')) {
+        console.log('ℹ️  Skipping data cleaning (Use --clean flag to wipe database)');
+        return;
+    }
+
+    console.log('🧹 Cleaning existing data...');
+
+    await User.deleteMany({});
+    await Product.deleteMany({});
+    await Order.deleteMany({});
+    await Review.deleteMany({});
+    await GlobalSetting.deleteMany({});
+    await Cart.deleteMany({});
+    await CartItem.deleteMany({});
+    await Wishlist.deleteMany({});
+    await Discount.deleteMany({});
+    await Promotion.deleteMany({});
+    await Setting.deleteMany({});
+
+    // Note: We are NOT deleting Themes as requested by original logic
+
+    console.log('✅ Data cleaned successfully');
 };
 
 const seedGlobalSettings = async () => {
-  console.log('⚙️  Seeding Global Settings...');
-  
-  const settingData = {
-    siteName: 'My Ecom Store',
-    taxRate: 0.1, // 10%
-    shippingCost: 15,
-    currency: 'USD',
-    isMaintenanceMode: false,
-    supportEmail: 'support@demo.com'
-  };
+    console.log('⚙️  Seeding Global Settings...');
 
-  // Using findOneAndUpdate with upsert ensures singleton pattern logic if run multiple times
-  // But since we cleaned data, create is fine too. sticking to robust singleton logic.
-  await GlobalSetting.findOneAndUpdate({}, settingData, { 
-    upsert: true, 
-    new: true,
-    setDefaultsOnInsert: true 
-  });
-  
-  console.log('✅ Global Settings seeded');
+    const settingData = {
+        siteName: 'My Ecom Store',
+        taxRate: 0.1, // 10%
+        shippingCost: 15,
+        currency: 'USD',
+        isMaintenanceMode: false,
+        supportEmail: 'support@demo.com'
+    };
+
+    // Idempotency: upsert ensures we have one global setting doc
+    const result = await GlobalSetting.findOneAndUpdate({}, settingData, {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true
+    });
+
+    console.log('✅ Global Settings Synced');
 };
 
 const seedAdmin = async () => {
-  console.log('👤 Seeding Admin User...');
-  
-  // validation is handled in User model pre-save hook which hashes the password
-  // so we should pass plain text password here
-  const admin = await User.create({
-    name: 'Super Admin',
-    email: 'admin@demo.com',
-    password: '12345678',
-    role: 'admin',
-    isVerified: true,
-    address: {
-        street: '123 Admin St',
-        city: 'Admin City',
-        state: 'Admin State',
-        zipCode: '10000',
-        country: 'Country'
-    },
-    bio: 'I am the shop owner.',
-    profilePicture: 'https://ui-avatars.com/api/?name=Super+Admin&background=0D8ABC&color=fff'
-  });
-  
-  console.log('✅ Admin User created');
-  return admin;
+    console.log('👤 Seeding Admin User...');
+
+    const adminEmail = 'admin@demo.com';
+    const existingAdmin = await User.findOne({ email: adminEmail });
+
+    if (existingAdmin) {
+        console.log('➡️  Admin User already exists (Skipped creation)');
+        return existingAdmin;
+    }
+
+    // validation is handled in User model pre-save hook which hashes the password
+    const admin = await User.create({
+        name: 'Super Admin',
+        email: adminEmail,
+        password: '12345678',
+        role: 'admin',
+        isVerified: true,
+        address: {
+            street: '123 Admin St',
+            city: 'Admin City',
+            state: 'Admin State',
+            zipCode: '10000',
+            country: 'Country'
+        },
+        bio: 'I am the shop owner.',
+        profilePicture: 'https://ui-avatars.com/api/?name=Super+Admin&background=0D8ABC&color=fff'
+    });
+
+    console.log('✅ Admin User Created');
+    return admin;
 };
 
 const seedThemes = async () => {
-  console.log('🎨 Seeding Themes...');
-  try {
-    await ThemeService.initializeDatabase();
-    console.log('✅ Themes initialized');
-  } catch (error: any) {
-    console.error('❌ Error seeding themes:', error.message);
-  }
+    console.log('🎨 Seeding Themes...');
+    try {
+        await ThemeService.initializeDatabase();
+        // Assuming ThemeService handles idempotency internally or throws if exists
+        console.log('✅ Themes initialized');
+    } catch (error: any) {
+        console.error('❌ Error seeding themes:', error.message);
+    }
 };
 
 const seedPromotions = async () => {
     console.log('🎫 Seeding Promotions...');
 
-    await Promotion.create({
-        name: 'Launch Special',
-        description: 'Get 15% off your first order',
-        type: 'percentage',
-        value: 15,
-        code: 'LAUNCH15',
-        startDate: new Date(),
-        endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)), // 1 month from now
-        isActive: true,
-        usageLimit: 100,
-        usageCount: 0
-    });
+    const promotionsToCheck = [
+        {
+            name: 'Launch Special',
+            description: 'Get 15% off your first order',
+            type: 'percentage',
+            value: 15,
+            code: 'LAUNCH15',
+            startDate: new Date(),
+            endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)), // 1 month from now
+            isActive: true,
+            usageLimit: 100,
+            usageCount: 0
+        },
+        {
+            name: 'Fixed Discount',
+            description: '$20 off orders over $100',
+            type: 'fixed',
+            value: 20,
+            code: 'SAVE20',
+            startDate: new Date(),
+            endDate: new Date(new Date().setMonth(new Date().getMonth() + 2)),
+            isActive: true,
+            usageLimit: 50,
+            usageCount: 0,
+            minPurchaseAmount: 100
+        }
+    ];
 
-    await Promotion.create({
-        name: 'Fixed Discount',
-        description: '$20 off orders over $100',
-        type: 'fixed',
-        value: 20,
-        code: 'SAVE20',
-        startDate: new Date(),
-        endDate: new Date(new Date().setMonth(new Date().getMonth() + 2)),
-        isActive: true,
-        usageLimit: 50,
-        usageCount: 0,
-        minPurchaseAmount: 100
-    });
-
-    console.log('✅ Promotions seeded');
+    for (const promoData of promotionsToCheck) {
+        const existing = await Promotion.findOne({ code: promoData.code });
+        if (existing) {
+            console.log(`➡️  Promotion "${promoData.code}" already exists (Skipped)`);
+        } else {
+            await Promotion.create(promoData);
+            console.log(`✅ Promotion "${promoData.code}" Created`);
+        }
+    }
 };
 
 const seedDiscounts = async () => {
     console.log('🏷️ Seeding Discounts...');
 
-    await Discount.create({
+    const discountData = {
         name: 'Summer Sale',
         description: '20% off on all Electronics',
         type: 'percentage',
@@ -150,13 +171,32 @@ const seedDiscounts = async () => {
         endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)),
         isActive: true,
         applicableCategories: ['Electronics']
-    });
+    };
 
-    console.log('✅ Discounts seeded');
+    // Check by name or unique properties
+    const existing = await Discount.findOne({ name: discountData.name });
+    if (existing) {
+        console.log(`➡️  Discount "${discountData.name}" already exists (Skipped)`);
+    } else {
+        await Discount.create(discountData);
+        console.log(`✅ Discount "${discountData.name}" Created`);
+    }
 };
 
 const seedOrders = async (user: any, products: any[]) => {
     console.log('📦 Seeding Orders...');
+
+    if (!user) {
+        console.log('⚠️  No user provided for orders seeding per missing admin.');
+        return;
+    }
+
+    // Idempotency Check: check if this user already has any orders
+    const existingOrdersCount = await Order.countDocuments({ user: user._id });
+    if (existingOrdersCount > 0) {
+        console.log(`➡️  User already has ${existingOrdersCount} orders (Skipped generation)`);
+        return;
+    }
 
     const statuses = ['delivered', 'shipped', 'processing', 'pending'] as const;
     const paymentStatuses = ['paid', 'paid', 'paid', 'pending'] as const;
@@ -166,6 +206,9 @@ const seedOrders = async (user: any, products: any[]) => {
         // Pick 2 random products
         const p1 = products[Math.floor(Math.random() * products.length)];
         const p2 = products[Math.floor(Math.random() * products.length)];
+
+        // Safe guard against empty products array
+        if (!p1 || !p2) continue;
 
         const item1 = {
             product: p1._id,
@@ -219,200 +262,239 @@ const seedOrders = async (user: any, products: any[]) => {
 
 const seedWishlist = async (user: any, products: any[]) => {
     console.log('💖 Seeding Wishlist...');
-    
+
+    if (!user) return;
+
+    // Idempotency: Check if wishlist exists
+    const existingWishlist = await Wishlist.findOne({ user: user._id });
+    if (existingWishlist) {
+        console.log('➡️  Wishlist already exists (Skipped)');
+        return;
+    }
+
     // Pick 3 random products
     const wishlistProducts = products.slice(0, 3).map(p => p._id);
-    
+
     await Wishlist.create({
         user: user._id,
         products: wishlistProducts
     });
-    
-    console.log('✅ Wishlist seeded');
+
+    console.log('✅ Wishlist Created');
 };
 
 const seedProductsAndReviews = async (adminUser: any) => {
-  console.log('🛍️  Seeding Products & Reviews...');
-  
-  const categories = ['Electronics', 'Fashion', 'Home & Living', 'Accessories'];
-  
-  const dummyProducts = [
-    {
-      name: 'Wireless Noise Cancelling Headphones',
-      price: 299.99,
-      category: ['Electronics', 'Accessories'],
-      imageUrl: 'https://placehold.co/600x400?text=Headphones',
-      description: 'Experience world-class noise cancellation and premium sound quality.',
-      htmlDescription: '<p>Experience world-class noise cancellation and premium sound quality.</p>',
-    },
-    {
-      name: 'Smart Fitness Watch',
-      price: 149.50,
-      category: ['Electronics', 'Fitness'],
-      imageUrl: 'https://placehold.co/600x400?text=Smart+Watch',
-      description: 'Track your health and fitness goals with precision.',
-      htmlDescription: '<p>Track your health and fitness goals with precision.</p>',
-    },
-    {
-      name: 'Premium Cotton T-Shirt',
-      price: 29.99,
-      category: ['Fashion'],
-      imageUrl: 'https://placehold.co/600x400?text=T-Shirt',
-      description: 'Soft, breathable cotton perfect for everyday wear.',
-      htmlDescription: '<p>Soft, breathable cotton perfect for everyday wear.</p>',
-    },
-    {
-      name: 'Ergonomic Office Chair',
-      price: 199.00,
-      category: ['Home & Living', 'Furniture'],
-      imageUrl: 'https://placehold.co/600x400?text=Office+Chair',
-      description: 'Work in comfort with adjustable support and lumbar cushioning.',
-      htmlDescription: '<p>Work in comfort with adjustable support and lumbar cushioning.</p>',
-    },
-    {
-      name: 'Modern Coffee Table',
-      price: 89.99,
-      category: ['Home & Living', 'Furniture'],
-      imageUrl: 'https://placehold.co/600x400?text=Coffee+Table',
-      description: 'Minimalist design to elevate your living room decor.',
-      htmlDescription: '<p>Minimalist design to elevate your living room decor.</p>',
-    },
-    {
-      name: 'Bluetooth Portable Speaker',
-      price: 59.95,
-      category: ['Electronics'],
-      imageUrl: 'https://placehold.co/600x400?text=Speaker',
-      description: 'Powerful sound in a compact, waterproof design.',
-      htmlDescription: '<p>Powerful sound in a compact, waterproof design.</p>',
-    },
-    {
-      name: 'Leather Weekend Bag',
-      price: 120.00,
-      category: ['Fashion', 'Accessories'],
-      imageUrl: 'https://placehold.co/600x400?text=Leather+Bag',
-      description: 'Stylish and spacious bag for your weekend getaways.',
-      htmlDescription: '<p>Stylish and spacious bag for your weekend getaways.</p>',
-    },
-    {
-      name: 'Digital Camera 4K',
-      price: 850.00,
-      category: ['Electronics'],
-      imageUrl: 'https://placehold.co/600x400?text=Camera',
-      description: 'Capture life moments in stunning 4K resolution.',
-      htmlDescription: '<p>Capture life moments in stunning 4K resolution.</p>',
-    },
-    {
-      name: 'Ceramic Plant Pot',
-      price: 15.00,
-      category: ['Home & Living'],
-      imageUrl: 'https://placehold.co/600x400?text=Plant+Pot',
-      description: 'Beautiful ceramic pot for your indoor plants.',
-      htmlDescription: '<p>Beautiful ceramic pot for your indoor plants.</p>',
-    },
-    {
-      name: 'Gaming Mechanical Keyboard',
-      price: 110.00,
-      category: ['Electronics', 'Gaming'],
-      imageUrl: 'https://placehold.co/600x400?text=Keyboard',
-      description: 'Tactile switches and RGB lighting for the ultimate gaming experience.',
-      htmlDescription: '<p>Tactile switches and RGB lighting for the ultimate gaming experience.</p>',
+    console.log('🛍️  Seeding Products & Reviews...');
+
+    if (!adminUser) {
+        console.log('⚠️  Skipping reviews creation due to missing admin user');
+        // Continue to create products though
     }
-  ];
 
-  const createdProducts = [];
+    // const categories = ['Electronics', 'Fashion', 'Home & Living', 'Accessories']; // Unused currently
 
-  for (const prodData of dummyProducts) {
-    // Create Product
-    // Note: slug is handled by pre-save hook in product.model.ts usually. 
-    // If not, we might need to add it, but based on context it seems likely.
-    // I'll add a simple slug generator just in case the hook fails or isn't triggered on create (though it should be).
-    const slug = prodData.name.toLowerCase().replace(/ /g, '-') + '-' + Math.floor(Math.random() * 1000);
+    const dummyProducts = [
+        {
+            name: 'Wireless Noise Cancelling Headphones',
+            price: 299.99,
+            category: ['Electronics', 'Accessories'],
+            imageUrl: 'https://placehold.co/600x400?text=Headphones',
+            description: 'Experience world-class noise cancellation and premium sound quality.',
+            htmlDescription: '<p>Experience world-class noise cancellation and premium sound quality.</p>',
+        },
+        {
+            name: 'Smart Fitness Watch',
+            price: 149.50,
+            category: ['Electronics', 'Fitness'],
+            imageUrl: 'https://placehold.co/600x400?text=Smart+Watch',
+            description: 'Track your health and fitness goals with precision.',
+            htmlDescription: '<p>Track your health and fitness goals with precision.</p>',
+        },
+        {
+            name: 'Premium Cotton T-Shirt',
+            price: 29.99,
+            category: ['Fashion'],
+            imageUrl: 'https://placehold.co/600x400?text=T-Shirt',
+            description: 'Soft, breathable cotton perfect for everyday wear.',
+            htmlDescription: '<p>Soft, breathable cotton perfect for everyday wear.</p>',
+        },
+        {
+            name: 'Ergonomic Office Chair',
+            price: 199.00,
+            category: ['Home & Living', 'Furniture'],
+            imageUrl: 'https://placehold.co/600x400?text=Office+Chair',
+            description: 'Work in comfort with adjustable support and lumbar cushioning.',
+            htmlDescription: '<p>Work in comfort with adjustable support and lumbar cushioning.</p>',
+        },
+        {
+            name: 'Modern Coffee Table',
+            price: 89.99,
+            category: ['Home & Living', 'Furniture'],
+            imageUrl: 'https://placehold.co/600x400?text=Coffee+Table',
+            description: 'Minimalist design to elevate your living room decor.',
+            htmlDescription: '<p>Minimalist design to elevate your living room decor.</p>',
+        },
+        {
+            name: 'Bluetooth Portable Speaker',
+            price: 59.95,
+            category: ['Electronics'],
+            imageUrl: 'https://placehold.co/600x400?text=Speaker',
+            description: 'Powerful sound in a compact, waterproof design.',
+            htmlDescription: '<p>Powerful sound in a compact, waterproof design.</p>',
+        },
+        {
+            name: 'Leather Weekend Bag',
+            price: 120.00,
+            category: ['Fashion', 'Accessories'],
+            imageUrl: 'https://placehold.co/600x400?text=Leather+Bag',
+            description: 'Stylish and spacious bag for your weekend getaways.',
+            htmlDescription: '<p>Stylish and spacious bag for your weekend getaways.</p>',
+        },
+        {
+            name: 'Digital Camera 4K',
+            price: 850.00,
+            category: ['Electronics'],
+            imageUrl: 'https://placehold.co/600x400?text=Camera',
+            description: 'Capture life moments in stunning 4K resolution.',
+            htmlDescription: '<p>Capture life moments in stunning 4K resolution.</p>',
+        },
+        {
+            name: 'Ceramic Plant Pot',
+            price: 15.00,
+            category: ['Home & Living'],
+            imageUrl: 'https://placehold.co/600x400?text=Plant+Pot',
+            description: 'Beautiful ceramic pot for your indoor plants.',
+            htmlDescription: '<p>Beautiful ceramic pot for your indoor plants.</p>',
+        },
+        {
+            name: 'Gaming Mechanical Keyboard',
+            price: 110.00,
+            category: ['Electronics', 'Gaming'],
+            imageUrl: 'https://placehold.co/600x400?text=Keyboard',
+            description: 'Tactile switches and RGB lighting for the ultimate gaming experience.',
+            htmlDescription: '<p>Tactile switches and RGB lighting for the ultimate gaming experience.</p>',
+        }
+    ];
 
-    const product = await Product.create({
-      ...prodData,
-      slug: slug,
-      stock: Math.floor(Math.random() * 100) + 10,
-      imagePublicId: 'dummy_id' // Required by some logic probably
-    });
+    const resultProducts = [];
 
-    // Add Reviews
-    const reviewCount = Math.floor(Math.random() * 3) + 3; // 3 to 5 reviews
-    let totalRating = 0;
-    const reviewIds = [];
+    for (const prodData of dummyProducts) {
+        // Idempotency: Check if product exists by name
+        const existingProduct = await Product.findOne({ name: prodData.name });
 
-    for (let i = 0; i < reviewCount; i++) {
-        const rating = Math.floor(Math.random() * 2) + 4; // 4 or 5 stars
-        totalRating += rating;
+        if (existingProduct) {
+            console.log(`➡️  Product "${prodData.name}" already exists (Skipped)`);
+            resultProducts.push(existingProduct);
+            continue;
+        }
 
-        const review = await Review.create({
-            user: adminUser._id,
-            product: product._id,
-            rating: rating,
-            title: i % 2 === 0 ? 'Great product!' : 'Excellent value',
-            comment: 'This is a demo review generated by the seeder script. I really liked the quality and shipping speed.',
+        // Create Product
+        const slug = prodData.name.toLowerCase().replace(/ /g, '-') + '-' + Math.floor(Math.random() * 1000);
+
+        const product = await Product.create({
+            ...prodData,
+            slug: slug,
+            stock: Math.floor(Math.random() * 100) + 10,
+            imagePublicId: 'dummy_id'
         });
-        reviewIds.push(review._id);
+
+        // Add Reviews only if we just created the product and have an admin user
+        if (adminUser) {
+            const reviewCount = Math.floor(Math.random() * 3) + 3; // 3 to 5 reviews
+            let totalRating = 0;
+            const reviewIds = [];
+
+            for (let i = 0; i < reviewCount; i++) {
+                const rating = Math.floor(Math.random() * 2) + 4; // 4 or 5 stars
+                totalRating += rating;
+
+                const review = await Review.create({
+                    user: adminUser._id,
+                    product: product._id,
+                    rating: rating,
+                    title: i % 2 === 0 ? 'Great product!' : 'Excellent value',
+                    comment: 'This is a demo review generated by the seeder script. I really liked the quality and shipping speed.',
+                });
+                reviewIds.push(review._id);
+            }
+
+            // Update Product stats
+            product.reviews = reviewIds;
+            product.averageRating = totalRating / reviewCount;
+            product.reviewCount = reviewCount;
+            await product.save();
+        }
+
+        console.log(`✅ Product "${prodData.name}" Created`);
+        resultProducts.push(product);
     }
 
-    // Update Product stats
-    product.reviews = reviewIds;
-    product.averageRating = totalRating / reviewCount;
-    product.reviewCount = reviewCount;
-    await product.save();
-
-    createdProducts.push(product);
-  }
-  
-  console.log('✅ 10 Products with Reviews created');
-  return createdProducts;
+    return resultProducts;
 };
 
 const seed = async () => {
-  try {
-    console.log('🚀 Starting Database Seed...');
-    
-    // Connect to DB
-    await mongoose.connect(MONGO_URI);
-    console.log('✅ Connected to MongoDB');
+    try {
+        console.log('🚀 Starting Database Seed...');
 
-    // 1. Clean Data
-    await cleanData();
-    
-    // 2. Global Settings
-    await seedGlobalSettings();
+        // 🚨 Production Safety Lock
+        const isProduction = process.env.NODE_ENV === 'production';
+        const forceProduction = process.argv.includes('--force-production');
 
-    // 3. Admin User
-    const admin = await seedAdmin();
+        if (isProduction && !forceProduction) {
+            console.error('\n❌ CRITICAL ERROR: Production environment detected!');
+            console.error('   Seeding is blocked to prevent accidental data loss.');
+            console.error('   To override, run: npm run seed -- --force-production\n');
+            process.exit(1);
+        }
 
-    // 4. Themes
-    await seedThemes();
+        // Connect to DB
+        await mongoose.connect(MONGO_URI);
+        console.log('✅ Connected to MongoDB');
 
-    // 5. Promotions & Discounts
-    await seedPromotions();
-    await seedDiscounts();
+        // 1. Clean Data (Conditional)
+        await cleanData();
 
-    // 6. Products & Reviews
-    const products = await seedProductsAndReviews(admin);
+        // 2. Global Settings
+        await seedGlobalSettings();
 
-    // 7. Orders
-    await seedOrders(admin, products);
+        // 3. Admin User
+        const admin = await seedAdmin();
 
-    // 8. Wishlist
-    await seedWishlist(admin, products);
+        // 4. Themes
+        await seedThemes();
 
-    console.log('\n=============================================');
-    console.log('🎉  SEEDING COMPLETE!');
-    console.log('=============================================');
-    console.log('🔑  Admin Credentials:');
-    console.log('    Email:    admin@demo.com');
-    console.log('    Password: 123456');
-    console.log('=============================================\n');
+        // 5. Promotions & Discounts
+        await seedPromotions();
+        await seedDiscounts();
 
-    process.exit(0);
-  } catch (error) {
-    console.error('❌ Seeding failed:', error);
-    process.exit(1);
-  }
+        // 6. Products & Reviews
+        // If clean run or new products, this returns an array of products
+        // If items already exist, it returns the existing ones
+        const products = await seedProductsAndReviews(admin);
+
+        // 7. Orders
+        await seedOrders(admin, products);
+
+        // 8. Wishlist
+        await seedWishlist(admin, products);
+
+        console.log('\n=============================================');
+        console.log('🎉  SEEDING COMPLETE!');
+        console.log('=============================================');
+        if (admin) {
+            console.log('🔑  Admin Credentials:');
+            console.log('    Email:    admin@demo.com');
+            console.log('    Password: 12345678');
+        } else {
+            console.log('    (Admin user not recreated/returned)');
+        }
+        console.log('=============================================\n');
+
+        process.exit(0);
+    } catch (error) {
+        console.error('❌ Seeding failed:', error);
+        process.exit(1);
+    }
 };
 
 seed();
