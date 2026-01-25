@@ -24,7 +24,7 @@ import { Setting } from '../models/setting.model';
 // Import Services
 import { ThemeService } from '../services/theme.service';
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/ecommerce_db';
+const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/ecommerce_db';
 
 const cleanData = async () => {
   console.log('🧹 Cleaning existing data...');
