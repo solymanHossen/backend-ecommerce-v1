@@ -73,11 +73,11 @@ const seedAdmin = async () => {
   console.log('👤 Seeding Admin User...');
   
   const salt = await bcrypt.genSalt(10);
-  const hashedPassword = await bcrypt.hash('123456', salt);
+  const hashedPassword = await bcrypt.hash('12345678', salt);
   
   const admin = await User.create({
     name: 'Super Admin',
-    email: 'admin@demo.com',
+    email: 'admin@gmail.com',
     password: hashedPassword,
     role: 'admin',
     isVerified: true,
