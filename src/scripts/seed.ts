@@ -72,13 +72,12 @@ const seedGlobalSettings = async () => {
 const seedAdmin = async () => {
   console.log('👤 Seeding Admin User...');
   
-  const salt = await bcrypt.genSalt(10);
-  const hashedPassword = await bcrypt.hash('12345678', salt);
-  
+  // validation is handled in User model pre-save hook which hashes the password
+  // so we should pass plain text password here
   const admin = await User.create({
     name: 'Super Admin',
-    email: 'admin@gmail.com',
-    password: hashedPassword,
+    email: 'admin@demo.com',
+    password: '12345678',
     role: 'admin',
     isVerified: true,
     address: {
