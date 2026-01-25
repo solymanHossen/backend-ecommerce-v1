@@ -16,6 +16,7 @@ import wishlistRoutes from "./routes/wishlist.routes";
 import checkoutRoutes from "./routes/checkout.routes";
 import webhookRoutes from "./routes/webhook.routes";
 import themeRoutes from "./routes/theme.routes";
+import globalSettingRoutes from "./routes/global-setting.routes";
 import { ThemeService } from "./services/theme.service";
 import { errorHandler } from './middleware/error.middleware';
 import logger from "./utils/logger";
@@ -79,6 +80,7 @@ app.use('/api/v1/cart', cartRoutes);
 app.use('/api/v1/wishlist', wishlistRoutes);
 app.use('/api/v1/checkout', checkoutRoutes);
 app.use('/api/v1/themes', themeRoutes);
+app.use('/api/v1/settings', globalSettingRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {

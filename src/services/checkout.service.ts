@@ -16,9 +16,6 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string,{
 apiVersion: '2024-12-18.acacia'as Stripe.LatestApiVersion,
 });
 
-const TAX_RATE = 0.1; // 10% tax rate
-const SHIPPING_COST = 10; // $10 flat shipping rate
-
 export class CheckoutService {
   static async createCheckoutSession(
     userId: string | mongoose.Types.ObjectId,
@@ -60,7 +57,8 @@ export class CheckoutService {
     // Create Stripe Session
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: ["card"],
-        line_items: order.items.map((item: any) => {
+        line_items: [
+            ...order.items.map((item: any) => {
              const product = item.product; 
              // Ensure we use the price from the ORDER (which came from DB)
              // Order stores unit price in items
@@ -75,7 +73,30 @@ export class CheckoutService {
                 },
                 quantity: item.quantity,
               };
-        }),
+             }),
+             // Add Tax Line Item
+             {
+                price_data: {
+                    currency: "usd",
+                    product_data: {
+                        name: "Tax",
+                    },
+                    unit_amount: Math.round(order.tax * 100),
+                },
+                quantity: 1,
+             },
+             // Add Shipping Line Item
+             {
+                price_data: {
+                    currency: "usd",
+                    product_data: {
+                        name: "Shipping Cost",
+                    },
+                    unit_amount: Math.round(order.shippingCost * 100),
+                },
+                quantity: 1,
+             }
+        ],
         mode: "payment",
         success_url: `${process.env.FRONTEND_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.FRONTEND_URL}/checkout/cancel`,

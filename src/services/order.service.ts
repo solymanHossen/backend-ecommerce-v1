@@ -3,9 +3,7 @@ import mongoose, {Schema} from "mongoose";
 import { Product } from '../models/product.model';
 import { PromotionService } from './promotion.service';
 import { AppError } from "../utils/AppError";
-
-const TAX_RATE = 0.1;
-const SHIPPING_COST = 10;
+import { GlobalSettingService } from './global-setting.service';
 
 export class OrderService {
     static async createOrder(orderData: { 
@@ -24,6 +22,11 @@ export class OrderService {
          try {
             const { user, items, shippingAddress, billingAddress, paymentMethod, promotionCode } = orderData;
             
+            // Fetch dynamic settings
+            const settings = await GlobalSettingService.getSettings();
+            const TAX_RATE = settings.taxRate;
+            const SHIPPING_COST = settings.shippingCost;
+
             if (!items || items.length === 0) {
                 throw new AppError("Cart is empty", 400);
             }
