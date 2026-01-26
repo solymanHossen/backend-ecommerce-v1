@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 import { IUser } from './user.model';
 import { IProduct } from './product.model';
 import {IPromotion} from "./promotion.model";
+import { IStore } from './store.model';
 
 export interface IOrderItem {
     product: IProduct['_id'];
@@ -43,6 +44,9 @@ export interface IOrder extends Document {
     shippingAddress: IShippingAddress;
     billingAddress: IBillingAddress;
     promotion?: IPromotion['_id'];
+    store?: IStore['_id'];
+    parentOrder?: IOrder['_id'];
+    children?: IOrder['_id'][];
 }
 
 const orderSchema = new Schema<IOrder>({
@@ -50,6 +54,7 @@ const orderSchema = new Schema<IOrder>({
     items: [{
         product: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
         quantity: { type: Number, required: true },
+        price: { type: Number, required: true }
     }],
     subtotal:{ type: Number, required: true },
     tax: { type: Number,default:0 },
@@ -80,6 +85,9 @@ const orderSchema = new Schema<IOrder>({
         country: { type: String },
     },
     promotion: { type: Schema.Types.ObjectId, ref: 'Promotion' },
+    store: { type: Schema.Types.ObjectId, ref: 'Store' },
+    parentOrder: { type: Schema.Types.ObjectId, ref: 'Order' },
+    children: [{ type: Schema.Types.ObjectId, ref: 'Order' }]
 }, { timestamps: true });
 
 export const Order = mongoose.model<IOrder>('Order', orderSchema);
