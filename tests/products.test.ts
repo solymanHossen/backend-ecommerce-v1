@@ -149,4 +149,45 @@ describe('Product Management', () => {
             expect([403, 500]).toContain(res.status);
         });
     });
+
+    describe('Sad Path & Security', () => {
+        it('should return 400 or 404 for invalid MongoDB ID format', async () => {
+            const res = await request(app).get('/api/v1/products/invalid-id-123');
+            
+            // Ensure server doesn't crash (500), expect 400 or 404
+            expect(res.status).not.toBe(500); 
+            expect([400, 404]).toContain(res.status);
+        });
+
+        it('should forbid non-admin users from creating products', async () => {
+             // 1. Create a regular user
+             const regularUser = await User.create({
+                name: 'Regular User',
+                email: 'regular@test.com',
+                password: 'Password123!',
+                role: 'user', // Note: role is USER, not ADMIN
+                isVerified: true
+             });
+             
+             // 2. Generate their token
+             const regularUserToken = jwt.sign(
+                 { id: regularUser._id, role: regularUser.role }, 
+                 process.env.JWT_SECRET as string
+             );
+
+             // 3. Attempt to create a product
+             const res = await request(app)
+                .post('/api/v1/products')
+                .set('Authorization', `Bearer ${regularUserToken}`)
+                .send({ 
+                    name: 'Hacked Product', 
+                    price: 10,
+                    description: 'Test',
+                    category: ['test']
+                });
+
+             // 4. Expect server to reject it (403 Forbidden)
+             expect(res.status).toBe(403);
+        });
+    });
 });

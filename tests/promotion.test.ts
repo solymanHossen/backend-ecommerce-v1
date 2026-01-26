@@ -1,4 +1,3 @@
-
 import mongoose from 'mongoose';
 import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
@@ -7,6 +6,7 @@ import { User } from '../src/models/user.model';
 import { Promotion } from '../src/models/promotion.model';
 import { Product } from '../src/models/product.model';
 import { Cart } from '../src/models/cart.model';
+import { Order } from '../src/models/order.model';
 import jwt from 'jsonwebtoken';
 
 // Setup Mock Configs
@@ -32,9 +32,29 @@ let userToken: string;
 let userId: string;
 let productId: string;
 
+// Helper Addresses
+const addresses = {
+    fullName: 'Test User',
+    addressLine1: '123 Main', 
+    city: 'City', 
+    postalCode: '00000', 
+    country: 'Country', 
+    state: 'S'
+};
+
 beforeAll(async () => {
     mongoServer = await MongoMemoryServer.create();
     await mongoose.connect(mongoServer.getUri());
+
+    // Mock session to allow transactions on standalone instance
+    const originalStartSession = mongoose.startSession.bind(mongoose);
+    jest.spyOn(mongoose, 'startSession').mockImplementation(async (options) => {
+        const session = await originalStartSession(options);
+        session.startTransaction = jest.fn();
+        session.commitTransaction = jest.fn();
+        session.abortTransaction = jest.fn();
+        return session;
+    });
 });
 
 afterAll(async () => {
@@ -47,6 +67,7 @@ beforeEach(async () => {
     await User.deleteMany({});
     await Product.deleteMany({});
     await Cart.deleteMany({});
+    await Order.deleteMany({});
 
     // Create Admin
     const admin = await User.create({
@@ -69,13 +90,13 @@ beforeEach(async () => {
     userId = user._id.toString();
     userToken = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET as string);
 
-    // Create Product
+    // Create Product ($100)
     const product = await Product.create({
         name: 'Expensive Item',
         description: 'Quality',
         htmlDescription: '<p>Quality</p>',
         imageUrl: 'http://example.com/item.jpg',
-        price: 100, // $100
+        price: 100, 
         stock: 50,
         category: ['General']
     });
@@ -84,17 +105,17 @@ beforeEach(async () => {
 
 describe('Promotion Management', () => {
 
-    describe('Happy Path', () => {
+    describe('Happy Path (CRUD)', () => {
         it('should allow admin to create a promotion code', async () => {
             const promoData = {
-                name: 'Test Sale', // Required
-                description: 'Save big', // Required
+                name: 'Test Sale',
+                description: 'Save big',
                 code: 'SAVE10',
                 type: 'percentage',
                 value: 10,
                 minPurchaseAmount: 50,
                 startDate: new Date(),
-                endDate: new Date(Date.now() + 86400000), // Tomorrow
+                endDate: new Date(Date.now() + 86400000), 
                 isActive: true,
                 usageLimit: 100
             };
@@ -109,19 +130,8 @@ describe('Promotion Management', () => {
             expect(res.body.data.code).toBe('SAVE10');
         });
 
-        // Note: Actual "apply" logic usually happens at Checkout/Cart calculation.
-        // Assuming there isn't a direct /apply endpoint in standard routes provided
-        // but we likely test logic via checkout or a verify endpoint. 
-        // If there is no specific endpoint to "apply" a promo to a rogue cart session,
-        // we can test the creation and retrieval or effectiveness calc.
-        // HOWEVER, user requested "User applies a valid promotion to an order (mocking order calculation)"
-        // Since we don't have the Checkout endpoint code, let's assume valid 'create' is the admin part
-        // And for the User part, we'll try to fetch it or check validity if an endpoint exists.
-        // If not, we'll verify via a mock CART logic or just ensure the created promo is retrievable/valid.
-        
-        // Let's assume we can fetch it as a user to check validity/existence
         it('should allow user to view valid promotions', async () => {
-             const promo = await Promotion.create({
+             await Promotion.create({
                 name: 'Public Promo',
                 description: 'For everyone',
                 code: 'WELCOME',
@@ -143,19 +153,31 @@ describe('Promotion Management', () => {
         });
     });
 
-    describe('Sad Path', () => {
-        it('should fail when user applies/uses expired promotion', async () => {
-            // Since we can't easily "apply" without checkout route context,
-            // we will simulate the behavior by creating an expired promo and asserting 
-            // if we were to validate it (or if there was a validate endpoint).
-            // Alternatively, test creation of expired promo? (Admin specific).
-            // Let's assume there's a validation endpoint or we test that it is NOT returned in active list.
-            
+    // ==========================================================
+    // NEW: Business Logic Tests (Step 3)
+    // ==========================================================
+    describe('Promotion Application Logic', () => {
+        
+        const createOrderWithPromo = async (code: string) => {
+            return request(app)
+                .post('/api/v1/orders')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send({
+                    items: [{ product: productId, quantity: 1 }],
+                    shippingAddress: addresses,
+                    billingAddress: addresses,
+                    paymentMethod: 'credit_card',
+                    promotionCode: code
+                });
+        };
+
+        it('should NOT apply expired promotion', async () => {
+            // Create expired promo
             await Promotion.create({
-                name: 'Old Promo',
-                description: 'Expired',
-                code: 'EXPIRED',
-                type: 'fixed',
+                name: 'Expired',
+                description: 'Old',
+                code: 'EXPIRED10',
+                type: 'percentage',
                 value: 10,
                 startDate: new Date(Date.now() - 100000),
                 endDate: new Date(Date.now() - 50000), // Ended in past
@@ -163,43 +185,79 @@ describe('Promotion Management', () => {
                 usageLimit: 100
             });
 
-            // Try to get "active" promotions possibly filtered?
-            // If get /promotions returns all, then maybe no filtering implementation.
-            // But let's assume we want to ensure we can't cheat. 
-            // Since we lack a "apply" endpoint in the provided snippets (only CRUD),
-            // I'll stick to a robust validation test users usually perform.
+            const res = await createOrderWithPromo('EXPIRED10');
             
-            const res = await request(app).get('/api/v1/promotions');
-            // If controller filters by date:
-            // expect(res.body.data).not.toContain ... 
-            
-            // To stick to request "User applies expired promotion":
-            // Assuming there might be a POST /checkout/validate-promo
-            // Since I don't have it, I'll simulate a mock specific test for the "logic" constraint 
-            // by trying to create an order with it IF ORDER endpoint existed.
-            // As fallback, assert Admin creation validation? No, admins can create past promos for records.
-            
-            // Reverting to: Try to create a promo with start date > end date (Invalid logic)
-             const invalidDatePromo = {
-                name: 'Bad Dates',
-                description: 'Wrong',
-                code: 'BAD1',
-                type: 'fixed',
-                value: 5,
-                startDate: new Date(Date.now() + 100000),
-                endDate: new Date(Date.now()), // End before start
-             };
-             
-             const resCreate = await request(app)
-                .post('/api/v1/promotions')
-                .set('Authorization', `Bearer ${adminToken}`)
-                .send(invalidDatePromo);
-             
-             // Validator should catch this
-             expect(resCreate.status).toBe(400);
+            expect(res.status).toBe(201); // Order created
+            expect(res.body.data.discountAmount).toBe(0); // Discount ignored
         });
 
-        it('should reject creation of promotion without mandatory fields', async () => {
+        it('should NOT apply if usage limit exceeded', async () => {
+            // Promo with limit 1
+            const promo = await Promotion.create({
+                name: 'Limited',
+                description: 'One use only',
+                code: 'LIMIT1',
+                type: 'fixed',
+                value: 20,
+                startDate: new Date(),
+                endDate: new Date(Date.now() + 100000),
+                isActive: true,
+                usageLimit: 1, // Max 1 use
+                usageCount: 1  // Already used 1 time
+            });
+
+            const res = await createOrderWithPromo('LIMIT1');
+
+            expect(res.status).toBe(201);
+            expect(res.body.data.discountAmount).toBe(0);
+        });
+
+        it('should NOT apply if minimum purchase amount not met', async () => {
+            // Min purchase $200 (Product is $100)
+            await Promotion.create({
+                name: 'Big Spender',
+                description: 'Spend more',
+                code: 'MIN200',
+                type: 'fixed',
+                value: 50,
+                startDate: new Date(),
+                endDate: new Date(Date.now() + 100000),
+                isActive: true,
+                usageLimit: 100,
+                minPurchaseAmount: 200 
+            });
+
+            const res = await createOrderWithPromo('MIN200');
+
+            expect(res.status).toBe(201);
+            expect(res.body.data.discountAmount).toBe(0);
+        });
+
+        it('should successfully apply valid promotion', async () => {
+            await Promotion.create({
+                name: 'Valid',
+                description: 'Good',
+                code: 'VALID20',
+                type: 'fixed',
+                value: 20, // $20 off
+                startDate: new Date(),
+                endDate: new Date(Date.now() + 100000),
+                isActive: true,
+                usageLimit: 100
+            });
+
+            const res = await createOrderWithPromo('VALID20');
+
+            expect(res.status).toBe(201);
+            expect(res.body.data.discountAmount).toBe(20);
+            // Verify usage count incremented
+            const updatedPromo = await Promotion.findOne({ code: 'VALID20' });
+            expect(updatedPromo?.usageCount).toBe(1);
+        });
+    });
+
+    describe('Sad Path (Validation)', () => {
+        it('should reject creation without mandatory fields', async () => {
              const res = await request(app)
                 .post('/api/v1/promotions')
                 .set('Authorization', `Bearer ${adminToken}`)

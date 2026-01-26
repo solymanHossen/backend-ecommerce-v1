@@ -136,4 +136,75 @@ describe('Checkout Process', () => {
         expect(res.body.data.sessionId).toBe('cs_test_123');
         // expect(mockCreateSession).toHaveBeenCalled(); 
     });
+
+    describe('Sad Path', () => {
+        it('should fail if cart is empty', async () => {
+             // Ensure cart is empty
+             await Cart.deleteMany({});
+             
+             const payload = {
+                shippingAddress: addresses,
+                billingAddress: addresses
+            };
+
+            const res = await request(app)
+                .post('/api/v1/checkout/create-checkout-session')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send(payload);
+
+            expect(res.status).toBe(400);
+            expect(res.body.message).toMatch(/Cart is empty/i);
+        });
+
+        it('should fail if product is out of stock', async () => {
+            // 1. Set product stock to 1
+            await Product.findByIdAndUpdate(productId, { stock: 1 });
+            
+            // 2. Add 2 items to cart (exceeding stock)
+            const item = await CartItem.create({
+                product: productId,
+                quantity: 2
+            });
+            await Cart.create({
+                user: userId,
+                items: [item._id]
+            });
+
+            const payload = {
+                shippingAddress: addresses,
+                billingAddress: addresses
+            };
+
+            const res = await request(app)
+                .post('/api/v1/checkout/create-checkout-session')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send(payload);
+
+            expect(res.status).toBe(400);
+            expect(res.body.message).toMatch(/Insufficient stock/i);
+        });
+
+        it('should fail with invalid address', async () => {
+            // Add item to cart first
+            const item = await CartItem.create({ product: productId, quantity: 1 });
+            await Cart.create({ user: userId, items: [item._id] });
+
+            const invalidPayload = {
+                shippingAddress: {
+                    // Missing required fields like addressLine1, city, etc.
+                    fullName: 'Test User' 
+                },
+                billingAddress: addresses
+            };
+
+            const res = await request(app)
+                .post('/api/v1/checkout/create-checkout-session')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send(invalidPayload);
+
+            expect(res.status).toBe(400);
+            // Joi validation error check
+            expect(res.body.error).toBeDefined();
+        });
+    });
 });

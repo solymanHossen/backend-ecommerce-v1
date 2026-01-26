@@ -10,6 +10,12 @@ export const handleUploadError = (err: any, req: Request, res: Response, next: N
     if (!err) {
         return next()
     }
+
+    // Pass operational errors (like 403 Forbidden from adminMiddleware) to global error handler
+    if (err.isOperational || (err.statusCode && err.statusCode !== 500)) {
+        return next(err);
+    }
+
     console.log("Upload error:", err)
     console.log("Upload error details:", req.file)
 
