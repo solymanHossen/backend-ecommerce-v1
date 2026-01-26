@@ -51,6 +51,17 @@ export const adminMiddleware = async (req: AuthRequest, res: Response, next: Nex
     }
 };
 
+export const vendorMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        if (!req.user || (req.user.role !== UserRole.VENDOR && req.user.role !== UserRole.ADMIN)) {
+             throw new AppError('Access denied. Vendor rights required.', 403);
+        }
+        next();
+    } catch (error) {
+        next(error);
+    }
+};
+
 /**
  * Middleware to validate resource ownership
  * Used to prevent IDOR attacks on user-specific resources
