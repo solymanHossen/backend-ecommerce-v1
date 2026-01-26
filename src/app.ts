@@ -18,6 +18,7 @@ import webhookRoutes from "./routes/webhook.routes";
 import themeRoutes from "./routes/theme.routes";
 import globalSettingRoutes from "./routes/global-setting.routes";
 import storeRoutes from "./routes/store.routes";
+import analyticsRoutes from "./routes/analytics.routes";
 import { ThemeService } from "./services/theme.service";
 import { errorHandler } from './middleware/error.middleware';
 import logger from "./utils/logger";
@@ -83,6 +84,7 @@ app.use('/api/v1/checkout', checkoutRoutes);
 app.use('/api/v1/themes', themeRoutes);
 app.use('/api/v1/settings', globalSettingRoutes);
 app.use('/api/v1/stores', storeRoutes);
+app.use('/api/v1/analytics', analyticsRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {

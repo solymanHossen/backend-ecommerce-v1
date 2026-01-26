@@ -164,11 +164,38 @@ export class CheckoutService {
 
         await Promise.all(stockUpdatePromises);
 
+import { Store } from "../models/store.model";
+
         // Update order status
         order.paymentStatus = "paid";
         order.status = "processing";
         order.paymentIntentId = stripeSession.payment_intent as string;
         await order.save({ session: mongoSession });
+
+        // MULTI-VENDOR PAYOUT LOGIC
+        if (order.children && order.children.length > 0) {
+           for (const childOrderId of order.children) {
+               const childOrder = await Order.findById(childOrderId).session(mongoSession);
+               if (childOrder && childOrder.store) {
+                   // Update Child Order Status
+                   childOrder.paymentStatus = 'paid';
+                   childOrder.status = 'processing';
+                   childOrder.paymentIntentId = stripeSession.payment_intent as string;
+                   await childOrder.save({ session: mongoSession });
+
+                   // Update Store Balance
+                   const store = await Store.findById(childOrder.store).session(mongoSession);
+                   if (store) {
+                       const commissionAmount = (childOrder.totalAmount * store.commissionRate) / 100;
+                       
+                       const vendorEarnings = childOrder.totalAmount - commissionAmount;
+                       
+                       store.balance += vendorEarnings;
+                       await store.save({ session: mongoSession });
+                   }
+               }
+           }
+        }
 
         // Clear the user's cart
         await Cart.findOneAndUpdate(
