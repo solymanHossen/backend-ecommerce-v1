@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import {IReview} from "./review.model";
+import {IStore} from "./store.model";
 import slugify from "slugify";
  export interface IGalleryImage {
     _id?: any;
@@ -21,6 +22,8 @@ export interface IProduct extends Document {
     averageRating: number;
     reviewCount: number;
     stock:number | null;
+    store: IStore['_id'];
+    status: 'pending' | 'approved' | 'rejected';
 }
 const GalleryImageSchema = new Schema({
     url: { type: String, required: true },
@@ -40,6 +43,12 @@ const productSchema = new Schema<IProduct>({
     averageRating: { type: Number, default: 0 },
     reviewCount: { type: Number, default: 0 },
     stock:{ type: Number,required: true },
+    store: { type: Schema.Types.ObjectId, ref: 'Store', required: true },
+    status: { 
+        type: String, 
+        enum: ['pending', 'approved', 'rejected'], 
+        default: 'pending' 
+    },
 }, { timestamps: true });
 productSchema.pre('validate', async function (next) {
     if (!this.isModified('name')) return next();

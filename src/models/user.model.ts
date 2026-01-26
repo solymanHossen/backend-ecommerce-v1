@@ -2,12 +2,14 @@ import mongoose, { Document, Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import {ICart} from "./cart.model";
 import {IWishlist} from "./wishlist.model";
+import {IStore} from "./store.model";
 
 export interface IUser extends Document {
     email: string;
     password: string;
     name: string;
-    role: 'user' | 'admin';
+    role: 'user' | 'admin' | 'vendor';
+    store?: IStore['_id'];
     profilePicture?: string;
     bio?: string;
     address?: {
@@ -34,7 +36,8 @@ const userSchema = new Schema<IUser>({
     email: { type: String, required: true, unique: true,lowercase: true , trim: true},
     password: { type: String, required: true },
     name: { type: String, required: true },
-    role: { type: String, enum: ['user', 'admin'], default: 'user' },
+    role: { type: String, enum: ['user', 'admin', 'vendor'], default: 'user' },
+    store: { type: Schema.Types.ObjectId, ref: 'Store' },
     profilePicture: { type: String },
     bio: { type: String },
     address: {
