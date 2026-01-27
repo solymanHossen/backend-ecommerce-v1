@@ -1,3 +1,4 @@
+import { Store } from "../models/store.model";
 import { Cart } from "../models/cart.model";
 import { Order, IOrder, IOrderItem } from "../models/order.model";
 import { User } from "../models/user.model";
@@ -164,7 +165,7 @@ export class CheckoutService {
 
         await Promise.all(stockUpdatePromises);
 
-import { Store } from "../models/store.model";
+
 
         // Update order status
         order.paymentStatus = "paid";

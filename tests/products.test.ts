@@ -13,6 +13,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import app from '../src/app';
 import { Product } from '../src/models/product.model';
 import { User } from '../src/models/user.model';
+import { Store } from '../src/models/store.model';
 import jwt from 'jsonwebtoken';
 
 jest.mock('../src/config/redis', () => ({
@@ -51,6 +52,8 @@ jest.mock('../src/config/cloudinary', () => ({
 let mongoServer: MongoMemoryServer;
 let adminToken: string;
 let userToken: string;
+let storeId: string;
+let validProduct: any;
 
 beforeAll(async () => {
     mongoServer = await MongoMemoryServer.create();
@@ -65,6 +68,7 @@ afterAll(async () => {
 beforeEach(async () => {
     await Product.deleteMany({});
     await User.deleteMany({});
+    await Store.deleteMany({});
 
     const admin = await User.create({
         name: 'Admin',
@@ -75,6 +79,15 @@ beforeEach(async () => {
     });
     adminToken = jwt.sign({ id: admin._id, role: admin.role }, process.env.JWT_SECRET as string);
 
+    const store = await Store.create({
+        name: 'Test Store',
+        owner: admin._id,
+        status: 'active',
+        commissionRate: 10,
+        balance: 0
+    });
+    storeId = store._id.toString();
+
     const user = await User.create({
         name: 'User',
         email: 'user@test.com',
@@ -83,18 +96,20 @@ beforeEach(async () => {
         isVerified: true
     });
     userToken = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET as string);
-});
 
-describe('Product Management', () => {
-    const validProduct = {
+    validProduct = {
         name: 'Test Product',
         description: 'A great product',
         htmlDescription: '<p>A great product</p>',
         price: 99.99,
         category: ['electronics'],
         stock: 10,
-        imageUrl: 'http://example.com/image.jpg'
+        imageUrl: 'http://example.com/image.jpg',
+        store: storeId
     };
+});
+
+describe('Product Management', () => {
 
     describe('Public Access', () => {
         it('should list products without auth', async () => {

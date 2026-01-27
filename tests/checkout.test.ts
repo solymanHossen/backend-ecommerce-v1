@@ -18,6 +18,7 @@ import { Product } from '../src/models/product.model';
 import { Cart } from '../src/models/cart.model';
 import { CartItem } from '../src/models/cart-item.model';
 import { Order } from '../src/models/order.model';
+import { Store } from '../src/models/store.model';
 import jwt from 'jsonwebtoken';
 
 jest.mock('../src/config/redis', () => ({
@@ -71,7 +72,24 @@ beforeEach(async () => {
     await Cart.deleteMany({});
     await CartItem.deleteMany({});
     await Order.deleteMany({});
+    await Store.deleteMany({});
     jest.clearAllMocks();
+
+    const owner = await User.create({
+        name: 'Store Owner',
+        email: 'owner@test.com',
+        password: 'Password123!',
+        role: 'admin',
+        isVerified: true
+    });
+
+    const store = await Store.create({
+        name: 'Checkout Store',
+        owner: owner._id,
+        status: 'active',
+        commissionRate: 5,
+        balance: 0
+    });
 
     const user = await User.create({
         name: 'Shopper',
@@ -90,7 +108,8 @@ beforeEach(async () => {
         price: 100,
         category: ['general'],
         stock: 100,
-        imageUrl: 'url'
+        imageUrl: 'url',
+        store: store._id
     });
     productId = product._id.toString();
 });

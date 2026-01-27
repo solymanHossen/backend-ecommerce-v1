@@ -16,6 +16,7 @@ import { Product } from '../src/models/product.model';
 import { Cart } from '../src/models/cart.model';
 import { CartItem } from '../src/models/cart-item.model';
 import { Order } from '../src/models/order.model';
+import { Store } from '../src/models/store.model';
 import jwt from 'jsonwebtoken';
 
 jest.mock('../src/config/redis', () => ({
@@ -51,6 +52,7 @@ beforeEach(async () => {
     await Cart.deleteMany({});
     await CartItem.deleteMany({});
     await Order.deleteMany({});
+    await Store.deleteMany({});
 
     // Create User
     const user = await User.create({
@@ -73,6 +75,15 @@ beforeEach(async () => {
     });
     adminToken = jwt.sign({ id: admin._id, role: admin.role }, process.env.JWT_SECRET as string);
 
+    // Create Store
+    const store = await Store.create({
+        name: 'Order Store',
+        owner: admin._id,
+        status: 'active',
+        commissionRate: 5,
+        balance: 0
+    });
+
     // Create Product
     const product = await Product.create({
         name: 'Test Item',
@@ -81,7 +92,8 @@ beforeEach(async () => {
         price: 50,
         category: ['general'],
         stock: 100,
-        imageUrl: 'url'
+        imageUrl: 'url',
+        store: store._id
     });
     productId = product._id.toString();
 });
@@ -162,7 +174,7 @@ describe('Order System', () => {
 
     const createManualOrder = (userId: string, productId: string) => ({
         user: userId,
-        items: [{ product: productId, quantity: 1 }],
+        items: [{ product: productId, quantity: 1, price: 50 }],
         shippingAddress: validOrderPayload.shippingAddress,
         billingAddress: validOrderPayload.billingAddress,
         paymentMethod: 'credit_card',

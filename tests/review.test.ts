@@ -6,6 +6,7 @@ import app from '../src/app';
 import { Product } from '../src/models/product.model';
 import { User } from '../src/models/user.model';
 import { Review } from '../src/models/review.model';
+import { Store } from '../src/models/store.model';
 import jwt from 'jsonwebtoken';
 
 // Setup Mock Configs
@@ -71,6 +72,7 @@ beforeEach(async () => {
     await Product.deleteMany({});
     await User.deleteMany({});
     await Review.deleteMany({});
+    await Store.deleteMany({});
 
     // Create Admin
     const admin = await User.create({
@@ -81,6 +83,15 @@ beforeEach(async () => {
         isVerified: true
     });
     adminToken = jwt.sign({ id: admin._id, role: admin.role }, process.env.JWT_SECRET as string);
+
+    // Create Store
+    const store = await Store.create({
+        name: 'Review Store',
+        owner: admin._id,
+        status: 'active',
+        commissionRate: 5,
+        balance: 0
+    });
 
     // Create User
     const user = await User.create({
@@ -101,7 +112,8 @@ beforeEach(async () => {
         imageUrl: 'http://example.com/image.jpg',
         price: 100,
         category: ['test'],
-        stock: 10
+        stock: 10,
+        store: store._id
     });
     productId = product._id.toString();
 });

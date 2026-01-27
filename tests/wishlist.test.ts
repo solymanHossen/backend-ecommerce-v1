@@ -6,6 +6,7 @@ import app from '../src/app';
 import { Product } from '../src/models/product.model';
 import { User } from '../src/models/user.model';
 import { Wishlist } from '../src/models/wishlist.model';
+import { Store } from '../src/models/store.model';
 import jwt from 'jsonwebtoken';
 
 // Setup Mock Configs
@@ -56,6 +57,25 @@ beforeEach(async () => {
     await Product.deleteMany({});
     await User.deleteMany({});
     await Wishlist.deleteMany({});
+    await Store.deleteMany({});
+
+    // Create Store Owner
+    const owner = await User.create({
+        name: 'Store Owner',
+        email: 'owner@test.com',
+        password: 'Password123!',
+        role: 'admin',
+        isVerified: true
+    });
+
+    // Create Store
+    const store = await Store.create({
+        name: 'Wishlist Store',
+        owner: owner._id,
+        status: 'active',
+        commissionRate: 5,
+        balance: 0
+    });
 
     // Create User
     const user = await User.create({
@@ -76,7 +96,8 @@ beforeEach(async () => {
         imageUrl: 'http://example.com/image.jpg',
         price: 100,
         category: ['test'],
-        stock: 10
+        stock: 10,
+        store: store._id
     });
     productId = product._id.toString();
 });

@@ -5,6 +5,7 @@ import app from '../src/app';
 import { User } from '../src/models/user.model';
 import { Promotion } from '../src/models/promotion.model';
 import { Product } from '../src/models/product.model';
+import { Store } from '../src/models/store.model';
 import { Cart } from '../src/models/cart.model';
 import { Order } from '../src/models/order.model';
 import jwt from 'jsonwebtoken';
@@ -68,6 +69,7 @@ beforeEach(async () => {
     await Product.deleteMany({});
     await Cart.deleteMany({});
     await Order.deleteMany({});
+    await Store.deleteMany({});
 
     // Create Admin
     const admin = await User.create({
@@ -78,6 +80,15 @@ beforeEach(async () => {
         isVerified: true
     });
     adminToken = jwt.sign({ id: admin._id, role: admin.role }, process.env.JWT_SECRET as string);
+
+    // Create Store
+    const store = await Store.create({
+        name: 'Promo Store',
+        owner: admin._id,
+        status: 'active',
+        commissionRate: 5,
+        balance: 0
+    });
 
     // Create User
     const user = await User.create({
@@ -98,7 +109,8 @@ beforeEach(async () => {
         imageUrl: 'http://example.com/item.jpg',
         price: 100, 
         stock: 50,
-        category: ['General']
+        category: ['General'],
+        store: store._id
     });
     productId = product._id.toString();
 });

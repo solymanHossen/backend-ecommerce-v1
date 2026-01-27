@@ -5,6 +5,7 @@ import app from '../src/app';
 import { Order } from '../src/models/order.model';
 import { User } from '../src/models/user.model';
 import { Product } from '../src/models/product.model';
+import { Store } from '../src/models/store.model';
 import { Cart } from '../src/models/cart.model';
 
 // Setup Mock Configs
@@ -73,6 +74,7 @@ beforeEach(async () => {
     await User.deleteMany({});
     await Product.deleteMany({});
     await Cart.deleteMany({});
+    await Store.deleteMany({});
 
     // Create User
     const user = await User.create({
@@ -84,6 +86,15 @@ beforeEach(async () => {
     });
     userId = user._id.toString();
 
+    // Create Store
+    const store = await Store.create({
+        name: 'Webhook Store',
+        owner: user._id, // User is both owner and shopper for simplicity, or create separate admin
+        status: 'active',
+        commissionRate: 5,
+        balance: 0
+    });
+
     // Create Product
     const product = await Product.create({
         name: 'Webhook Product',
@@ -92,7 +103,8 @@ beforeEach(async () => {
         price: 100,
         stock: 10,
         category: ['test'],
-        imageUrl: 'http://example.com/img.jpg'
+        imageUrl: 'http://example.com/img.jpg',
+        store: store._id
     });
     productId = product._id.toString();
 
@@ -101,7 +113,8 @@ beforeEach(async () => {
         user: userId,
         items: [{
             product: productId,
-            quantity: 1
+            quantity: 1,
+            price: 100
         }],
         subtotal: 100,
         tax: 0,

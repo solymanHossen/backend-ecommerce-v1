@@ -10,6 +10,7 @@ const productSchema = Joi.object({
     category: Joi.array().items(Joi.string()).required(),
     imageUrl: Joi.string().uri().optional(),
     stock: Joi.number().positive().required(),
+    store: Joi.string().required(),
 });
 
 // Update Product Schema (allows partial data)

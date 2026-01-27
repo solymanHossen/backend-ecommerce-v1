@@ -22,7 +22,7 @@ export const getOrders = asyncHandler(async (req: AuthRequest, res: Response) =>
 
 export const getVendorOrders = asyncHandler(async (req: AuthRequest, res: Response) => {
     const store = await storeService.getStoreByOwner(req.user!._id);
-    const orders = await OrderService.getVendorOrders(store._id as string);
+    const orders = await OrderService.getVendorOrders(store._id as unknown as string);
     sendResponse(res, 200, true, "Vendor orders fetched successfully", orders);
 });
 

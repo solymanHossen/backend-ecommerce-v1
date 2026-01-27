@@ -22,6 +22,6 @@ export const getStoreBySlug = asyncHandler(async (req: Request, res: Response) =
 
 export const updateStore = asyncHandler(async (req: AuthRequest, res: Response) => {
     const myStore = await storeService.getStoreByOwner(req.user!._id);
-    const updatedStore = await storeService.updateStore(myStore._id as string, req.body);
+    const updatedStore = await storeService.updateStore(myStore._id as unknown as string, req.body);
     sendResponse(res, 200, true, "Store updated successfully", updatedStore);
 });
